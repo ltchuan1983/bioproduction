@@ -1,0 +1,1 @@
+features_to_drop: ['paper_number', 'cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
