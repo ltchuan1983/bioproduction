@@ -1,8 +1,13 @@
+
+
 import pandas as pd
+
 
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+
+from catboost import CatBoostRegressor
 
 from helper import create_gene_list, count_genes, convert_to_num_lists, tally_num_lists, onehot_encode, remove_features
 
@@ -49,7 +54,7 @@ INFO_FEATURES = ['paper_number', 'strain_background', 'product_name']
 CARBON_SOURCES_FEATURES = ['cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
 
 
-def create_pipe():
+def create_preprocessor():
 
     Gene_Lister = FunctionTransformer(create_gene_list, kw_args={'gene_string_features': gene_string_features})
     # count_genes uses another function count_genes_per_row in helper_py, but no need to import the latter
@@ -64,7 +69,7 @@ def create_pipe():
     FEATURES_TO_DROP = INFO_FEATURES + CARBON_SOURCES_FEATURES + gene_string_features + gene_numlist_features + ['gene_deletion_num', 'protein_scaffold_num']
     Remover =  FunctionTransformer(remove_features, kw_args={'features_to_drop': FEATURES_TO_DROP})
 
-    pipe = Pipeline([
+    preprocessor = Pipeline([
         ('gene_lister', Gene_Lister),
         ('gene_counter', Gene_Counter),
         ('eng_gene_numlister', Eng_Gene_NumLister),
@@ -78,5 +83,26 @@ def create_pipe():
 
     ])
 
+    return preprocessor
+
+def create_pipe(regressor):
+
+    Preprocessor = create_preprocessor()
+
+    pipe = Pipeline([
+        ('preprocessor', Preprocessor),
+        ('rgs', regressor)
+    ])
+
     return pipe
 
+def create_custom_regressor_pipe():
+
+    Preprocessor = create_preprocessor()
+
+    pipe = Pipeline([
+        ('preprocessor', Preprocessor),
+        ('rgs', CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0))
+    ])
+
+    return pipe

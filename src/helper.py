@@ -2,6 +2,10 @@ import sqlite3
 import pandas as pd
 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, root_mean_squared_error
+
+
+NUM_FOLDS = 8
 
 # Hardcode filepath for database. To be updated with argpase later
 DB_PATH = "../input/data.sqlite"
@@ -38,6 +42,8 @@ def load_sql_data(table_name):
     conn.commit()
     conn.close()
 
+    print(f"No. of data points in {table_name}: ", len(df))
+
     return df
 
 
@@ -61,7 +67,7 @@ def load_split_save_sql_data(test_size=0.3):
     df = load_sql_data("cleaned_data")
 
     # train test split data
-    train_df, test_df  = train_test_split(df, test_size=test_size, random_state=11)
+    train_df, test_df  = train_test_split(df, test_size=test_size, random_state=33)
 
     # Save data
     save_sql_data(train_df, "train_data")
@@ -79,16 +85,37 @@ def check_tables_in_db():
 
     tables = cursor.fetchall()
 
-    for table in tables:
-        print(table[0])
+    for index, table in enumerate(tables):
+        print(f"Table {index}: ", table[0])
     
     cursor.close()
     conn.close()
 
+def remove_data_by_mw(df, mw):
+    """
+    Remove data rows where mw matches the value of mw passed in.
 
+    A function to call by passing df and features 
+    OR to be wrapped in FunctionTransformer and used in pipeline
+    Will transform the df in place. 
 
+    Parameters:
+    ___________
+    df: pandas DataFrame
+        DataFrame containing data to be processed
+    
+    mw: int
+        Molecular weight of product (e.g. 2 for hydrogen) 
 
+    Returns:
+    ________
+    df: DataFrame where rows specified by mw have been removed
+    
+    """
 
+    df = df.drop(df[df.mw==mw].index, axis=0)
+
+    return df
 
 
 def create_gene_list(df, gene_string_features):
@@ -181,6 +208,7 @@ def onehot_encode(df, categorical_features):
     OR to be wrapped in FunctionTransformer and used in pipeline
     Will transform the df in place. 
     """
+
     for feature in categorical_features:
         df = pd.get_dummies(df, columns=[feature], prefix=feature, dtype=int)
     
@@ -192,30 +220,34 @@ def remove_features(df, features_to_drop):
     OR to be wrapped in FunctionTransformer and used in pipeline
     Will transform the df in place. 
     """
-    return df.drop(columns=features_to_drop, axis=1)
 
-
-def preprocess_data(df):
-
-    # Convert strings into lists of strings (each representing one gene)
-    df = create_gene_list(df, ["strain_background_genotype", "genes_modified"])
-
-    # Count the number of genes in the strain_background
-    df['background_genotype_num'] = df["strain_background_genotype"].apply(count_genes_per_row)
-
-    # Count the number of genes modified
-    df['genes_modified_num'] = df['genes_modified'].apply(count_genes_per_row)
-
-    # Hard code gene-related columns containing lists of numbers. Transfer to config later
-    gene_num_columns = ['strain_background_genotype_modification', 'gene_overexpression', 'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 'enzyme_redesign_evolution']
-
-    for column in gene_num_columns:
-        new_column = column + '_num'
-        df[new_column] = df[column].apply(sum)
-    
-
+    df = df.drop(columns=features_to_drop, axis=1)
     return df
-    
+
+def r2_rmse_score(y_test, y_pred, model_name):
+
+    print(" ")
+    print("*"*50)
+    print(f'Train Test Split Metrics for {model_name}')
+    print("*"*50)
+    print(" ")
+    print('R_squared score for overall: ', r2_score(y_test, y_pred))
+    print('R_squared score for yield: ', r2_score(y_test['yield'], y_pred['yield']))
+    print('R_squared score for titer: ', r2_score(y_test['titer'], y_pred['titer']))
+    print('R_squared score for rate: ', r2_score(y_test['rate'], y_pred['rate']))
+    print(" ")
+    print('RMSE for overall: ', root_mean_squared_error(y_test, y_pred))
+    print('RMSE for yield: ', root_mean_squared_error(y_test['yield'], y_pred['yield']))
+    print('RMSE for titer: ', root_mean_squared_error(y_test['titer'], y_pred['titer']))
+    print('RMSE for rate: ', root_mean_squared_error(y_test['rate'], y_pred['rate']))
+
+def display_cv_score(score, type):
+
+    print("**************************************")
+    print(f"Cross Validation Metrics: {type}")
+    print("**************************************")
+    print(score)
+    print("Average: ", score.mean())
 
 
 
