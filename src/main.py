@@ -13,8 +13,11 @@ from modes import perform_cross_validation, perform_train_test
 
 from sklearn.model_selection import cross_val_score, KFold
 from sklearn.metrics import make_scorer, r2_score, root_mean_squared_error
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
+from sklearn.multioutput import MultiOutputRegressor
 
 from catboost import CatBoostRegressor
+from xgboost import XGBRegressor
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -42,6 +45,9 @@ def main():
     if MODE == "train":
         run_train()
 
+    if MODE == "train_multi":
+        run_train_multi()
+
 
 def run_train():
 
@@ -51,6 +57,18 @@ def run_train():
 
     # Perform training, then validation on test data
     perform_train_test(X_train, y_train, X_test, y_test, regressor, "CatBoostRegressor")
+
+def run_train_multi():
+
+    battery = {
+    "CatBoostRegressor": CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0),
+    "RandomForestRegressor": RandomForestRegressor(n_estimators=1000),
+    "AdaBoostRegressor": MultiOutputRegressor(AdaBoostRegressor(n_estimators=1000)),
+    "XGBRegressor": XGBRegressor(n_estimators=1000)
+    }
+
+    for key, regressor in battery.items():
+        perform_train_test(X_train.copy(), y_train.copy(), X_test.copy(), y_test.copy(), regressor, key)
 
 
 def parse_args():
