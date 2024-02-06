@@ -33,7 +33,7 @@ def main():
     5. Run hyperparameter tuning for neural network
     6. Run AutoML
     7. Run stacking
-    8. Use saved model to predict 
+    8. Use saved model to predict
 
     
     """
