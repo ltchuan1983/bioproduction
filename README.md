@@ -1,5 +1,7 @@
 # Prediction of bioprocess yield, titer and rate
 
+![Version](https://img.shields.io/badge/Version-1.0-blue)
+
 Predicting microbial bioproduction (yield, titer and rate) from bioprocess variables and genetic modifications
 
 # Installation

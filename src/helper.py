@@ -23,14 +23,10 @@ def parse_args():
         description = "Options to use different pipelines for model training and to make predictions"
     )
 
-    # Add positional argument
-    parser.add_argument('mode', type=str,
-                        help=
-                        ''' 
-                        train       ---> Single regressor (CatBoostRegressor)\n
-                        train_multi ---> CatBoostRegressor, RandomForestRegress, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machine
+    mode_choices = ['train', 'train_multi', 'train_gridsearch', 'train_bayes', 'train_nn', 'train_embed_nn', 'train_tunable_nn', 'train_automl', 'train_stack']
 
-                        ''')
+    # Add positional argument
+    parser.add_argument('mode', type=str, choices=mode_choices, metavar='mode', help=f'Mode of operation. Choose one of the following {mode_choices}')
 
     # Parse the command line arguments
 
