@@ -24,7 +24,13 @@ def parse_args():
     )
 
     # Add positional argument
-    parser.add_argument('mode', type=str, help='pipe->Single regressor')
+    parser.add_argument('mode', type=str,
+                        help=
+                        ''' 
+                        train       ---> Single regressor (CatBoostRegressor)\n
+                        train_multi ---> CatBoostRegressor, RandomForestRegress, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machine
+
+                        ''')
 
     # Parse the command line arguments
 
