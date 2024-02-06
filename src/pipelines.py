@@ -3,7 +3,7 @@
 import pandas as pd
 
 
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 
@@ -91,18 +91,20 @@ def create_pipe(regressor):
 
     pipe = Pipeline([
         ('preprocessor', Preprocessor),
+        ('scaler', StandardScaler()),
         ('rgs', regressor)
     ])
 
     return pipe
 
-def create_custom_regressor_pipe():
+def create_linear_regression_pipe(regressor):
 
     Preprocessor = create_preprocessor()
 
     pipe = Pipeline([
         ('preprocessor', Preprocessor),
-        ('rgs', CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0))
+        ('rgs', regressor)
     ])
 
     return pipe
+

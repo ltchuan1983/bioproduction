@@ -1,11 +1,40 @@
+import sys
+import argparse
 import sqlite3
 import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, root_mean_squared_error
 
+from keras import backend as K
+import tensorflow as tf
 
+TARGETS = ['yield', 'titer', 'rate']
 NUM_FOLDS = 8
+
+def parse_args():
+
+    # Create ArgmentParser instance
+    parser = argparse.ArgumentParser(
+        prog = "training_and_prediction_options",
+        description = "Options to use different pipelines for model training and to make predictions"
+    )
+
+    # Add positional argument
+    parser.add_argument('mode', type=str, help='pipe->Single regressor')
+
+    # Parse the command line arguments
+
+    try:
+        args = parser.parse_args()
+        
+    except SystemExit:
+        print("Options for mode:")
+        print("------------------")
+        print("train -----> Fit CatBoostRegressor on train data and perform predictions on test data")
+        sys.exit(1)
+  
+    return args
 
 # Hardcode filepath for database. To be updated with argpase later
 DB_PATH = "../input/data.sqlite"
@@ -90,6 +119,16 @@ def check_tables_in_db():
     
     cursor.close()
     conn.close()
+
+def load_split_XY(table):
+
+    df = load_sql_data(table)
+
+    X = df.drop(columns=TARGETS, axis=1)
+    y = df[TARGETS]
+
+    return X, y
+
 
 def remove_data_by_mw(df, mw):
     """
@@ -241,6 +280,26 @@ def r2_rmse_score(y_test, y_pred, model_name):
     print('RMSE for titer: ', root_mean_squared_error(y_test['titer'], y_pred['titer']))
     print('RMSE for rate: ', root_mean_squared_error(y_test['rate'], y_pred['rate']))
 
+
+def r2_rmse_score2(y_test, y_pred, model_name):
+
+    r2_result = r_squared(y_test['titer'], y_pred['titer'])
+
+    print(" ")
+    print("*"*50)
+    print(f'Train Test Split Metrics for {model_name}')
+    print("*"*50)
+    print(" ")
+    print('R_squared score for overall: ', r2_result)
+    print('R_squared score for yield: ', r2_score(y_test['yield'], y_pred['yield']))
+    print('R_squared score for titer: ', r2_score(y_test['titer'], y_pred['titer']))
+    print('R_squared score for rate: ', r2_score(y_test['rate'], y_pred['rate']))
+    print(" ")
+    print('RMSE for overall: ', root_mean_squared_error(y_test, y_pred))
+    print('RMSE for yield: ', root_mean_squared_error(y_test['yield'], y_pred['yield']))
+    print('RMSE for titer: ', root_mean_squared_error(y_test['titer'], y_pred['titer']))
+    print('RMSE for rate: ', root_mean_squared_error(y_test['rate'], y_pred['rate']))
+
 def display_cv_score(score, type):
 
     print("**************************************")
@@ -249,5 +308,14 @@ def display_cv_score(score, type):
     print(score)
     print("Average: ", score.mean())
 
+def rmse(y_true, y_pred):
+        return K.sqrt(K.mean(K.square(y_true - y_pred)))
 
+    
+def r_squared(y_true, y_pred):
+    # SS_res = K.sum(K.square(y_true-y_pred))
+    # SS_tot = K.sum(K.square(y_true - K.mean(y_true)))
+    # return 1 - SS_res/(SS_tot + K.epsilon())
+
+    return tf.py_function(r2_score, (y_true, y_pred), tf.float64)
 

@@ -7,17 +7,12 @@ import sys
 import pandas as pd
 import numpy as np
 
-from helper import load_sql_data, load_split_save_sql_data, check_tables_in_db, remove_data_by_mw, r2_rmse_score
+from helper import parse_args, load_sql_data, load_split_save_sql_data, load_split_XY, check_tables_in_db, remove_data_by_mw, r2_rmse_score
 from pipelines import create_pipe, create_preprocessor
-from modes import perform_cross_validation, perform_train_test
+from modes import perform_cross_validation, perform_train_test, run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn
 
-from sklearn.model_selection import cross_val_score, KFold
-from sklearn.metrics import make_scorer, r2_score, root_mean_squared_error
-from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
-from sklearn.multioutput import MultiOutputRegressor
+from sklearn.metrics import r2_score, root_mean_squared_error
 
-from catboost import CatBoostRegressor
-from xgboost import XGBRegressor
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -26,6 +21,7 @@ TARGETS = ['yield', 'titer', 'rate']
 H2_MW = 2
 
 NUM_FOLDS = 8
+
 
 def main():
     """
@@ -42,58 +38,30 @@ def main():
     
     """
 
+    # Load train and test data from sqlite db. Still needs further preprocessing.
+    X_train, y_train = load_split_XY("train_data")
+    X_test, y_test = load_split_XY("test_data")
+
+    # Preprocess X_train and X_test
+    preprocessor = create_preprocessor()
+    X_train = preprocessor.fit_transform(X_train)
+    X_test = preprocessor.transform(X_test)
+
     if MODE == "train":
-        run_train()
+        run_train(X_train, y_train, X_test, y_test)
 
     if MODE == "train_multi":
-        run_train_multi()
+        run_train_multi(X_train, y_train, X_test, y_test)
 
+    if MODE == "train_gridsearch":
+        run_train_gridsearch(X_train, y_train, X_test, y_test)
+    
+    if MODE == "train_bayes":
+        run_train_bayes(X_train, y_train, X_test, y_test)
+    
+    if MODE == "train_nn":
+        run_train_nn(X_train, y_train, X_test, y_test)
 
-def run_train():
-
-    # Perform cross validation
-    regressor = CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0)
-    perform_cross_validation(X_train.copy(), y_train, regressor)
-
-    # Perform training, then validation on test data
-    perform_train_test(X_train, y_train, X_test, y_test, regressor, "CatBoostRegressor")
-
-def run_train_multi():
-
-    battery = {
-    "CatBoostRegressor": CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0),
-    "RandomForestRegressor": RandomForestRegressor(n_estimators=1000),
-    "AdaBoostRegressor": MultiOutputRegressor(AdaBoostRegressor(n_estimators=1000)),
-    "XGBRegressor": XGBRegressor(n_estimators=1000)
-    }
-
-    for key, regressor in battery.items():
-        perform_train_test(X_train.copy(), y_train.copy(), X_test.copy(), y_test.copy(), regressor, key)
-
-
-def parse_args():
-
-    # Create ArgmentParser instance
-    parser = argparse.ArgumentParser(
-        prog = "training_and_prediction_options",
-        description = "Options to use different pipelines for model training and to make predictions"
-    )
-
-    # Add positional argument
-    parser.add_argument('mode', type=str, help='pipe->Single regressor')
-
-    # Parse the command line arguments
-
-    try:
-        args = parser.parse_args()
-        
-    except SystemExit:
-        print("Options for mode:")
-        print("------------------")
-        print("train -----> Fit CatBoostRegressor on train data and perform predictions on test data")
-        sys.exit(1)
-  
-    return args
 
 if __name__ == "__main__":
 
@@ -101,15 +69,6 @@ if __name__ == "__main__":
     load_split_save_sql_data(test_size=0.3)
     check_tables_in_db()
 
-    # Load train and test data from sqlite db. Still needs further preprocessing.
-    df_train = load_sql_data("train_data")
-    df_test = load_sql_data("test_data")
-
-    X_train = df_train.drop(columns=TARGETS, axis=1)
-    y_train = df_train[TARGETS]
-
-    X_test = df_test.drop(columns=TARGETS, axis=1)
-    y_test = df_test[TARGETS]
 
     # df_train = remove_data_by_mw(df_train, 2)
     # df_test = remove_data_by_mw(df_test, 2)
