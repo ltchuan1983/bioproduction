@@ -2,12 +2,15 @@ import sys
 import argparse
 import sqlite3
 import pandas as pd
+import numpy as np
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, root_mean_squared_error
 
 from keras import backend as K
 import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, BatchNormalization
 
 TARGETS = ['yield', 'titer', 'rate']
 NUM_FOLDS = 8
@@ -265,32 +268,15 @@ def remove_features(df, features_to_drop):
 
 def r2_rmse_score(y_test, y_pred, model_name):
 
+    y_pred = pd.DataFrame(y_pred, columns=['yield', 'titer', 'rate'])
+    y_test = pd.DataFrame(y_test, columns=['yield', 'titer', 'rate'])
+
     print(" ")
     print("*"*50)
     print(f'Train Test Split Metrics for {model_name}')
     print("*"*50)
     print(" ")
     print('R_squared score for overall: ', r2_score(y_test, y_pred))
-    print('R_squared score for yield: ', r2_score(y_test['yield'], y_pred['yield']))
-    print('R_squared score for titer: ', r2_score(y_test['titer'], y_pred['titer']))
-    print('R_squared score for rate: ', r2_score(y_test['rate'], y_pred['rate']))
-    print(" ")
-    print('RMSE for overall: ', root_mean_squared_error(y_test, y_pred))
-    print('RMSE for yield: ', root_mean_squared_error(y_test['yield'], y_pred['yield']))
-    print('RMSE for titer: ', root_mean_squared_error(y_test['titer'], y_pred['titer']))
-    print('RMSE for rate: ', root_mean_squared_error(y_test['rate'], y_pred['rate']))
-
-
-def r2_rmse_score2(y_test, y_pred, model_name):
-
-    r2_result = r_squared(y_test['titer'], y_pred['titer'])
-
-    print(" ")
-    print("*"*50)
-    print(f'Train Test Split Metrics for {model_name}')
-    print("*"*50)
-    print(" ")
-    print('R_squared score for overall: ', r2_result)
     print('R_squared score for yield: ', r2_score(y_test['yield'], y_pred['yield']))
     print('R_squared score for titer: ', r2_score(y_test['titer'], y_pred['titer']))
     print('R_squared score for rate: ', r2_score(y_test['rate'], y_pred['rate']))
@@ -318,4 +304,58 @@ def r_squared(y_true, y_pred):
     # return 1 - SS_res/(SS_tot + K.epsilon())
 
     return tf.py_function(r2_score, (y_true, y_pred), tf.float64)
+
+def make_tunable_nn_model(hp):
+
+    input_dim = 42
+    output_dim = 3
+
+    np.random.seed(808)
+    tf.random.set_seed(808)
+
+    model = Sequential()
+
+    # Input layer
+    model.add(Dense(units=hp.Int('input_dense', min_value=64, max_value=512, step=16), input_dim=input_dim, kernel_initializer='glorot_uniform', activation='tanh'))
+
+    # Tunable number of blocks containing 1 Dropout, 1 BatchNormalization and 1 Dense layer
+    # for i in range(hp.Int('norm_dropout_dense', min_value=1, max_value=5, step=1)):
+    #     model.add(BatchNormalization())
+    #     model.add(Dropout(hp.Float('dropout', min_value=0.0, max_value=0.4, step=0.05)))
+    #     model.add(Dense(units=hp.Int('hidden_dense', min_value=64, max_value=4096, step=64), kernel_initializer='glorot_uniform', activation='tanh'))
+
+    # 3-block architecture that works well over various trials
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(units=hp.Int('hidden_dense_1', min_value=64, max_value=4096, step=16), kernel_initializer='glorot_uniform', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(units=hp.Int('hidden_dense_2', min_value=64, max_value=4096, step=16), kernel_initializer='glorot_uniform', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(units=hp.Int('hidden_dense_3', min_value=64, max_value=4096, step=16), kernel_initializer='glorot_uniform', activation='tanh'))
+    model.add(Dense(output_dim, activation="tanh"))
+
+    # Output layer
+    model.add(Dense(output_dim, activation="tanh"))
+
+    # # Setting up choices for different optimizers
+    # hp_optimizer = hp.Choice("Optimizer", values=['Adam', 'SGD'])
+
+    # if hp_optimizer == 'Adam':
+    #     hp_learning_rate = hp.Choice('learning_rate', values=[1e-1, 1e-2, 1e-3])
+    # elif hp_optimizer == 'SGD':
+    #     hp_learning_rate = hp.Choice('learning_rate', values=[1e-1, 1e-2, 1e-3])
+    #     nesterov = True
+    #     momentum = 0.9
+
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-1, 1e-2, 1e-3])
+
+    model.compile(optimizer='adam', loss="mean_squared_error", metrics=[r_squared])
+    
+    return model
+        
+
+
+
 

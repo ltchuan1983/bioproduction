@@ -9,7 +9,7 @@ import numpy as np
 
 from helper import parse_args, load_sql_data, load_split_save_sql_data, load_split_XY, check_tables_in_db, remove_data_by_mw, r2_rmse_score
 from pipelines import create_pipe, create_preprocessor
-from modes import perform_cross_validation, perform_train_test, run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn
+from modes import perform_cross_validation, perform_train_test, run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn, run_train_embed_nn, run_train_tunable_nn, run_train_automl, run_train_stack
 
 from sklearn.metrics import r2_score, root_mean_squared_error
 
@@ -61,6 +61,18 @@ def main():
     
     if MODE == "train_nn":
         run_train_nn(X_train, y_train, X_test, y_test)
+
+    if MODE == "train_embed_nn":
+        run_train_embed_nn(X_train, y_train, X_test, y_test)
+    
+    if MODE == "train_tunable_nn":
+        run_train_tunable_nn(X_train, y_train, X_test, y_test)
+
+    if MODE == "train_automl":
+        run_train_automl(X_train, y_train, X_test, y_test)
+    
+    if MODE == "train_stack":
+        run_train_stack(X_train, y_train, X_test, y_test)
 
 
 if __name__ == "__main__":
