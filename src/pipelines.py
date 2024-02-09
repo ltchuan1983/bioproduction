@@ -10,7 +10,7 @@ from sklearn.compose import ColumnTransformer
 from catboost import CatBoostRegressor
 
 from helper import create_gene_list, count_genes, convert_to_num_lists, tally_num_lists, onehot_encode, remove_features
-
+from helper import load_split_save_sql_data, check_tables_in_db, load_split_XY
 """
     Preprocessing Pipeline:
     _______________________
@@ -107,4 +107,21 @@ def create_linear_regression_pipe(regressor):
     ])
 
     return pipe
+
+def load_split_preprocess(table_name):
+
+    # Prepare and save train and test 
+    load_split_save_sql_data(table_name, test_size=0.3)
+    tables = check_tables_in_db()
+
+    # Load train and test data from sqlite db. Still needs further preprocessing.
+    X_train, y_train = load_split_XY("train_data")
+    X_test, y_test = load_split_XY("test_data")
+
+    # Preprocess X_train and X_test
+    preprocessor = create_preprocessor()
+    X_train = preprocessor.fit_transform(X_train)
+    X_test = preprocessor.transform(X_test)
+
+    return X_train, y_train, X_test, y_test
 

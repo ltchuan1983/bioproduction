@@ -9,8 +9,8 @@ from sklearn.metrics import r2_score, root_mean_squared_error
 
 from keras import backend as K
 import tensorflow as tf
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, BatchNormalization
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, BatchNormalization, Input, Flatten, Concatenate, Embedding, Conv1D, MaxPooling1D
 
 TARGETS = ['yield', 'titer', 'rate']
 NUM_FOLDS = 8
@@ -23,7 +23,7 @@ def parse_args():
         description = "Options to use different pipelines for model training and to make predictions"
     )
 
-    mode_choices = ['train', 'train_multi', 'train_gridsearch', 'train_bayes', 'train_nn', 'train_embed_nn', 'train_tunable_nn', 'train_automl', 'train_stack']
+    mode_choices = ['train', 'train_multi', 'train_gridsearch', 'train_bayes', 'train_nn', 'train_embed_nn', 'train_embed_genotype_nn', 'train_tunable_nn', 'train_automl', 'train_stack']
 
     # Add positional argument
     parser.add_argument('mode', type=str, choices=mode_choices, metavar='mode', help=f'Mode of operation. Choose one of the following {mode_choices}')
@@ -96,9 +96,13 @@ def save_sql_data(df, table_name="table"):
     conn.close()
 
 
-def load_split_save_sql_data(test_size=0.3):
+def load_split_save_sql_data(table_name, test_size=0.3):
 
-    df = load_sql_data("cleaned_data")
+    # cleaned_data: No embedding
+    # cleaned_data_2: Embedding (ave) for strain_background_genotype
+    # cleaned_data_3: Embedding (concat) for strain_background_genotype
+
+    df = load_sql_data(table_name)
 
     # train test split data
     train_df, test_df  = train_test_split(df, test_size=test_size, random_state=33)
@@ -124,6 +128,8 @@ def check_tables_in_db():
     
     cursor.close()
     conn.close()
+
+    return tables
 
 def load_split_XY(table):
 
@@ -232,7 +238,22 @@ def convert_to_num_lists(df, gene_numlist_features):
         df[feature] = df[feature].apply(convert_to_num_list_per_row)
     
     return df
+
+def convert_str_to_numpy_array(df, feature):
+    for i, row in df.iterrows():
+        df.at[i, feature] = np.fromstring(row[feature].strip('[]'), dtype=np.float32, sep=' ')
     
+    return df
+
+def convert_nocomma_str_to_list(df, feature):
+    
+    for i, row in df.iterrows():
+        array_str = row[feature]
+        elements = array_str.strip('[]').split(" ")
+        #integer_list = [int(element) for element in elements]
+        df.at[i, feature] = elements
+
+    return df
 
 def tally_num_lists(df, gene_numlist_features):
     """
@@ -267,6 +288,8 @@ def remove_features(df, features_to_drop):
 
     df = df.drop(columns=features_to_drop, axis=1)
     return df
+
+
 
 def r2_rmse_score(y_test, y_pred, model_name):
 
@@ -356,7 +379,53 @@ def make_tunable_nn_model(hp):
     model.compile(optimizer='adam', loss="mean_squared_error", metrics=[r_squared])
     
     return model
-        
+
+def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim):
+
+    # Define input layers
+    num_input = Input(shape=(num_features_count, ), name='num_input')
+    onehot_input = Input(shape=(onehot_features_count, ), name='onehot_input')
+    # tokenized genotypes padded to length of 20
+    genotype_input = Input(shape=(20, ), name="genotype_input")
+
+    # Define embedding layer for strain_background_genotype_tokenized
+    embedding_output_genotype = Embedding(input_dim=199, output_dim=40, input_length=20)(genotype_input)
+    embedding_output_genotype = Flatten()(embedding_output_genotype)
+
+    # Define embedding layer for one-hot features
+    # First step will produce output with shape (batch size, input_length, output_dim) (each dense vector represents each column)
+    embedding_output_onehot = Embedding(input_dim=onehot_features_count, output_dim=embedding_dim, input_length=onehot_features_count)(onehot_input)
+    # Flatten into (batch size, batch size x input_length)
+    embedding_output_onehot = Flatten()(embedding_output_onehot)
+
+    # Layer to concatenate continous_input and embedding output
+    concatenated = Concatenate()([num_input, embedding_output_onehot, embedding_output_genotype])
+
+    # Additional blocks of Dense, Dropout and BatchNormalization Layers
+    concatenated = Dense(64, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+    concatenated = Dropout(0.2)(concatenated)
+    concatenated = BatchNormalization()(concatenated)
+
+    concatenated = Dense(1024, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+    concatenated = Dropout(0.2)(concatenated)
+    concatenated = BatchNormalization()(concatenated)
+
+    concatenated = Dense(256, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+    concatenated = Dropout(0.2)(concatenated)
+    concatenated = BatchNormalization()(concatenated)
+
+    concatenated = Dense(32, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+
+    # Output layer
+    output = Dense(3, activation='linear')(concatenated)
+
+    # Deifine model
+    model = Model(inputs=[num_input, onehot_input, genotype_input], outputs=output)
+
+    # Compile the model
+    model.compile(optimizer='adam', loss='mean_squared_error', metrics=[r_squared])
+
+    return model
 
 
 

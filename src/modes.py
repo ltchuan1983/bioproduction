@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import cross_val_score, KFold, GridSearchCV
@@ -28,7 +29,7 @@ import h2o
 from h2o.automl import H2OAutoML
 
 from pipelines import create_preprocessor, create_pipe
-from helper import display_cv_score, r2_rmse_score, r_squared, rmse, make_tunable_nn_model
+from helper import display_cv_score, r2_rmse_score, r_squared, rmse, make_tunable_nn_model, make_nn_model_embed_cat_genotype
 
 tf.config.run_functions_eagerly(True)
 
@@ -39,6 +40,10 @@ TREES_DEPTH_PARAM = [4, 6, 8]
 L2_LEAF_REG_PARAM = [1, 5, 10]
 
 BATCH_SIZE = 32
+
+ONEHOT_FEATURES = ['dir_evo', 'Mod_path_opt', 'reactor_type_1.0', 'reactor_type_2.0', 'reactor_type_3.0', 
+                    'media_LB', 'media_M9', 'media_MOPS', 'media_NBS', 'media_RICH',
+                    'media_TB', 'media_YE', 'oxygen_1.0', 'oxygen_2.0', 'oxygen_3.0']
 
 
 def perform_cross_validation(X_train, y_train, regressor):
@@ -162,17 +167,30 @@ def run_train_bayes(X_train, y_train, X_test, y_test):
     # Evaluate predictions with r2 score and root mean square error
     r2_rmse_score(y_test, y_pred, "Best BayesSearch Model")
 
-def scale_X_and_Y(X_train, y_train, X_test, y_test):
+def scale_X_and_Y(X_train, y_train, X_test, y_test, noscale_features):
 
-    scalerX = StandardScaler()
-    X_train_scaled = scalerX.fit_transform(X_train)
-    X_test_scaled = scalerX.transform(X_test)
+    numerical_features = [col for col in X_train.columns if col not in noscale_features]
+
+    column_transformer = ColumnTransformer(
+        transformers=[
+            ('scaler', StandardScaler(), numerical_features)
+        ], 
+        remainder='passthrough' # passthrough columns will be placed at the back of the df
+    )
+
+    # Change the order of columns so that passthrough columns are at the back
+    all_columns = numerical_features + noscale_features
+    X_train_reordered = X_train.reindex(columns=all_columns)
+    X_test_reordered = X_test.reindex(columns=all_columns)
+
+    X_train_scaled = column_transformer.fit_transform(X_train_reordered)
+    X_test_scaled = column_transformer.transform(X_test_reordered)
 
     scalerY = StandardScaler()
     y_train_scaled = scalerY.fit_transform(y_train)
     y_test_scaled = scalerY.transform(y_test)
 
-    return X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled
+    return X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns
 
 def make_nn_model_1output():
 
@@ -224,13 +242,61 @@ def make_nn_model_3outputs():
 
     return model
 
+# def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim):
+
+#     # Define input layers
+#     num_input = Input(shape=(num_features_count, ), name='num_input')
+#     onehot_input = Input(shape=(onehot_features_count, ), name='onehot_input')
+#     # tokenized genotypes padded to length of 20
+#     genotype_input = Input(shape=(20, ), name="genotype_input")
+
+#     # Define embedding layer for strain_background_genotype_tokenized
+#     embedding_output_genotype = Embedding(input_dim=199, output_dim=40, input_length=20)(genotype_input)
+#     embedding_output_genotype = Flatten()(embedding_output_genotype)
+
+#     # Define embedding layer for one-hot features
+#     # First step will produce output with shape (batch size, input_length, output_dim) (each dense vector represents each column)
+#     embedding_output_onehot = Embedding(input_dim=onehot_features_count, output_dim=embedding_dim, input_length=onehot_features_count)(onehot_input)
+#     # Flatten into (batch size, batch size x input_length)
+#     embedding_output_onehot = Flatten()(embedding_output_onehot)
+
+#     # Layer to concatenate continous_input and embedding output
+#     concatenated = Concatenate()([num_input, embedding_output_onehot, embedding_output_genotype])
+
+#     # Additional blocks of Dense, Dropout and BatchNormalization Layers
+#     concatenated = Dense(64, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+#     concatenated = Dropout(0.2)(concatenated)
+#     concatenated = BatchNormalization()(concatenated)
+
+#     concatenated = Dense(1024, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+#     concatenated = Dropout(0.2)(concatenated)
+#     concatenated = BatchNormalization()(concatenated)
+
+#     concatenated = Dense(256, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+#     concatenated = Dropout(0.2)(concatenated)
+#     concatenated = BatchNormalization()(concatenated)
+
+#     concatenated = Dense(32, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
+
+#     # Output layer
+#     output = Dense(3, activation='linear')(concatenated)
+
+#     # Deifine model
+#     model = Model(inputs=[num_input, onehot_input, genotype_input], outputs=output)
+
+#     # Compile the model
+#     model.compile(optimizer='adam', loss='mean_squared_error', metrics=[r_squared])
+
+#     return model
+
+
 def run_train_nn(X_train, y_train, X_test, y_test):
 
     np.random.seed(808)
     tf.random.set_seed(808)
 
     # Makes a big difference to scale the target values
-    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled = scale_X_and_Y(X_train, y_train, X_test, y_test)
+    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns = scale_X_and_Y(X_train, y_train, X_test, y_test, ONEHOT_FEATURES)
 
     # pca = PCA(n_components=0.95)
     # X_train_pca = pca.fit_transform(X_train_scaled)
@@ -253,30 +319,28 @@ def run_train_embed_nn(X_train, y_train, X_test, y_test):
 
     embedding_dim = 5
 
-    onehot_features = ['dir_evo', 'Mod_path_opt', 'reactor_type_1.0', 'reactor_type_2.0', 'reactor_type_3.0', 
-                       'media_LB', 'media_M9', 'media_MOPS', 'media_NBS', 'media_RICH',
-                       'media_TB', 'media_YE', 'oxygen_1.0', 'oxygen_2.0', 'oxygen_3.0']
-    
+    # Receive all_columns back to label the new dataframe according to the new order after ColumnTransformer
+    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns = scale_X_and_Y(X_train, y_train, X_test, y_test, ONEHOT_FEATURES)
 
-    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled = scale_X_and_Y(X_train, y_train, X_test, y_test)
-
-    X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
-    X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test.columns)
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=all_columns)
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns=all_columns)
 
     y_train_scaled = pd.DataFrame(y_train_scaled, columns=y_train.columns)
     y_test_scaled = pd.DataFrame(y_test_scaled, columns=y_test.columns)
 
-    X_train_onehot = X_train_scaled[onehot_features]
-    X_train_num = X_train_scaled.drop(onehot_features, axis=1)
+    X_train_onehot = X_train_scaled[ONEHOT_FEATURES]
+    X_train_num = X_train_scaled.drop(ONEHOT_FEATURES, axis=1)
 
-    X_test_onehot = X_test_scaled[onehot_features]
-    X_test_num = X_test_scaled.drop(onehot_features, axis=1)
+    X_test_onehot = X_test_scaled[ONEHOT_FEATURES]
+    X_test_num = X_test_scaled.drop(ONEHOT_FEATURES, axis=1)
 
     print(X_test_onehot.info())
     print(X_test_num.info())
 
     num_features_count = len(X_train_num.columns)
+    print(num_features_count)
     onehot_features_count = len(X_train_onehot.columns)
+    print(onehot_features_count)
 
     # Define input layers
     num_input = Input(shape=(num_features_count, ), name='num_input')
@@ -321,7 +385,65 @@ def run_train_embed_nn(X_train, y_train, X_test, y_test):
     y_pred = model.predict([X_test_num, X_test_onehot])
 
     # Evaluate predictions with r2 score and root mean square error
-    r2_rmse_score(y_test_scaled, y_pred, "Neural Network Model")
+    r2_rmse_score(y_test_scaled, y_pred, "Neural Network (Embed Onehot) Model")
+
+def run_train_embed_genotype_nn(X_train, y_train, X_test, y_test):
+
+    embedding_dim = 5
+    
+    noscale_features = ONEHOT_FEATURES + ["strain_background_genotype_tokenized"]
+
+    # Receive all_columns back to label the new dataframe according to the new order after ColumnTransformer
+    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns = scale_X_and_Y(X_train, y_train, X_test, y_test, noscale_features)
+
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=all_columns)
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns=all_columns)
+
+    y_train_scaled = pd.DataFrame(y_train_scaled, columns=y_train.columns)
+    y_test_scaled = pd.DataFrame(y_test_scaled, columns=y_test.columns)
+
+    all_columns_except = all_columns.copy()
+    all_columns_except.remove("strain_background_genotype_tokenized")
+    # columns returned as dtype object. Likely because "strain_background_genotype_tokenized" contains list, thus dtype object
+    # Need to change to float or int to feed to keras layers
+    for column in all_columns_except:
+        X_train_scaled[column] = X_train_scaled[column].astype('float64')
+        X_test_scaled[column] = X_test_scaled[column].astype('float64')
+    
+    # Can expand the array into individual columns (1 column for each element)
+    # expanded_train_genotype = X_train_scaled["strain_background_genotype_tokenized"].apply(pd.Series)
+    # expanded_train_genotype.columns = [f'genotype_{i+1}' for i in range(expanded_train_genotype.shape[1])]
+    # X_train_scaled = X_train_scaled.drop("strain_background_genotype_tokenized", axis=1)
+    # X_train_scaled = pd.concat([X_train_scaled, expanded_train_genotype], axis=1)
+   
+
+    X_train_onehot = X_train_scaled[ONEHOT_FEATURES]
+    # Important for the data to be accepted by Keras Input
+    # Change from pd df of dtype object to array of dtype int64
+    X_train_genotype = np.array(X_train_scaled["strain_background_genotype_tokenized"].tolist())
+    X_train_num = X_train_scaled.drop(noscale_features, axis=1)
+
+    X_test_onehot = X_test_scaled[ONEHOT_FEATURES]
+    # Important for the data to be accepted by Keras Input
+    # Change from pd df of dtype object to array of dtype int64
+    X_test_genotype = np.array(X_test_scaled["strain_background_genotype_tokenized"].tolist())
+    X_test_num = X_test_scaled.drop(noscale_features, axis=1)
+
+    num_features_count = len(X_train_num.columns)
+    onehot_features_count = len(X_train_onehot.columns)
+
+    model = make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim)
+
+    # Fit the model with data
+    model.fit({"num_input": X_train_num, "onehot_input": X_train_onehot, "genotype_input": X_train_genotype}, 
+              y_train_scaled, 
+              validation_data=({"num_input": X_test_num, "onehot_input": X_test_onehot, "genotype_input": X_test_genotype}, y_test_scaled), 
+              batch_size=BATCH_SIZE, epochs=40)
+
+    y_pred = model.predict([X_test_num, X_test_onehot, X_test_genotype])
+
+    # Evaluate predictions with r2 score and root mean square error
+    r2_rmse_score(y_test_scaled, y_pred, "Neural Network (Embedded OneHot + Genotype) Model")
 
 class HyperRegressor(keras_tuner.HyperModel):
     def build(self, hp):
@@ -445,10 +567,10 @@ def run_train_automl(X_train, y_train, X_test, y_test):
 
 def run_train_stack(X_train, y_train, X_test, y_test):
 
-    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled = scale_X_and_Y(X_train, y_train, X_test, y_test)
+    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns = scale_X_and_Y(X_train, y_train, X_test, y_test, ONEHOT_FEATURES)
 
-    X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
-    X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test.columns)
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=all_columns)
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns=all_columns)
 
     y_train_scaled = pd.DataFrame(y_train_scaled, columns=y_train.columns)
     y_test_scaled = pd.DataFrame(y_test_scaled, columns=y_test.columns)
@@ -480,3 +602,52 @@ def run_train_stack(X_train, y_train, X_test, y_test):
 
     # Evaluate predictions with r2 score and root mean square error
     r2_rmse_score(y_test_scaled, y_pred, "Stacked Ensemble")
+
+def run_train_stack_nn_catboost(X_train, y_train, X_test, y_test):
+
+    embedding_dim = 5
+    
+    noscale_features = ONEHOT_FEATURES + ["strain_background_genotype_tokenized"]
+
+    # Receive all_columns back to label the new dataframe according to the new order after ColumnTransformer
+    X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns = scale_X_and_Y(X_train, y_train, X_test, y_test, noscale_features)
+
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=all_columns)
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns=all_columns)
+
+    y_train_scaled = pd.DataFrame(y_train_scaled, columns=y_train.columns)
+    y_test_scaled = pd.DataFrame(y_test_scaled, columns=y_test.columns)
+
+    all_columns_except = all_columns.copy()
+    all_columns_except.remove("strain_background_genotype_tokenized")
+    # columns returned as dtype object. Likely because "strain_background_genotype_tokenized" contains list, thus dtype object
+    # Need to change to float or int to feed to keras layers
+    for column in all_columns_except:
+        X_train_scaled[column] = X_train_scaled[column].astype('float64')
+        X_test_scaled[column] = X_test_scaled[column].astype('float64')
+    
+    # Can expand the array into individual columns (1 column for each element)
+    # expanded_train_genotype = X_train_scaled["strain_background_genotype_tokenized"].apply(pd.Series)
+    # expanded_train_genotype.columns = [f'genotype_{i+1}' for i in range(expanded_train_genotype.shape[1])]
+    # X_train_scaled = X_train_scaled.drop("strain_background_genotype_tokenized", axis=1)
+    # X_train_scaled = pd.concat([X_train_scaled, expanded_train_genotype], axis=1)
+   
+
+    X_train_onehot = X_train_scaled[ONEHOT_FEATURES]
+    # Important for the data to be accepted by Keras Input
+    # Change from pd df of dtype object to array of dtype int64
+    X_train_genotype = np.array(X_train_scaled["strain_background_genotype_tokenized"].tolist())
+    X_train_num = X_train_scaled.drop(noscale_features, axis=1)
+
+    X_test_onehot = X_test_scaled[ONEHOT_FEATURES]
+    # Important for the data to be accepted by Keras Input
+    # Change from pd df of dtype object to array of dtype int64
+    X_test_genotype = np.array(X_test_scaled["strain_background_genotype_tokenized"].tolist())
+    X_test_num = X_test_scaled.drop(noscale_features, axis=1)
+
+    num_features_count = len(X_train_num.columns)
+    onehot_features_count = len(X_train_onehot.columns)
+
+    # Use K-fold for neural network to define a new feature column without data leakage
+
+    # Define the number of folds for cross_validation

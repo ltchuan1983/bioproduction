@@ -8,8 +8,9 @@ import pandas as pd
 import numpy as np
 
 from helper import parse_args, load_sql_data, load_split_save_sql_data, load_split_XY, check_tables_in_db, remove_data_by_mw, r2_rmse_score
-from pipelines import create_pipe, create_preprocessor
-from modes import perform_cross_validation, perform_train_test, run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn, run_train_embed_nn, run_train_tunable_nn, run_train_automl, run_train_stack
+from pipelines import create_pipe, create_preprocessor, load_split_preprocess
+from modes import perform_cross_validation, perform_train_test, run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn, run_train_embed_nn, run_train_embed_genotype_nn, run_train_tunable_nn, run_train_automl, run_train_stack
+from helper import convert_to_num_lists, convert_str_to_numpy_array, convert_nocomma_str_to_list
 
 from sklearn.metrics import r2_score, root_mean_squared_error
 
@@ -38,48 +39,65 @@ def main():
     
     """
 
-    # Load train and test data from sqlite db. Still needs further preprocessing.
-    X_train, y_train = load_split_XY("train_data")
-    X_test, y_test = load_split_XY("test_data")
+    # # Load train and test data from sqlite db. Still needs further preprocessing.
+    # X_train, y_train = load_split_XY("train_data")
+    # X_test, y_test = load_split_XY("test_data")
 
-    # Preprocess X_train and X_test
-    preprocessor = create_preprocessor()
-    X_train = preprocessor.fit_transform(X_train)
-    X_test = preprocessor.transform(X_test)
+
+
+    # # Preprocess X_train and X_test
+    # preprocessor = create_preprocessor()
+    # X_train = preprocessor.fit_transform(X_train)
+    # X_test = preprocessor.transform(X_test)
 
     if MODE == "train":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data_3')
         run_train(X_train, y_train, X_test, y_test)
 
     if MODE == "train_multi":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_multi(X_train, y_train, X_test, y_test)
 
     if MODE == "train_gridsearch":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_gridsearch(X_train, y_train, X_test, y_test)
     
     if MODE == "train_bayes":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_bayes(X_train, y_train, X_test, y_test)
     
     if MODE == "train_nn":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_nn(X_train, y_train, X_test, y_test)
 
     if MODE == "train_embed_nn":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_embed_nn(X_train, y_train, X_test, y_test)
+
+    if MODE == "train_embed_genotype_nn":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data_4')
+        convert_to_num_lists(X_train, ["strain_background_genotype_tokenized"])
+        convert_to_num_lists(X_test, ["strain_background_genotype_tokenized"])
+        run_train_embed_genotype_nn(X_train, y_train, X_test, y_test)
     
     if MODE == "train_tunable_nn":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_tunable_nn(X_train, y_train, X_test, y_test)
 
     if MODE == "train_automl":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_automl(X_train, y_train, X_test, y_test)
     
     if MODE == "train_stack":
+        X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_stack(X_train, y_train, X_test, y_test)
 
 
 if __name__ == "__main__":
 
-    # Prepare and save train and test 
-    load_split_save_sql_data(test_size=0.3)
-    check_tables_in_db()
+    # # Prepare and save train and test 
+    # load_split_save_sql_data(test_size=0.3)
+    # check_tables_in_db()
 
 
     # df_train = remove_data_by_mw(df_train, 2)
