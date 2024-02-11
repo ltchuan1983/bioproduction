@@ -1,6 +1,7 @@
 import sys
 import argparse
 import sqlite3
+import random
 import pandas as pd
 import numpy as np
 
@@ -10,20 +11,30 @@ from sklearn.metrics import r2_score, root_mean_squared_error
 from keras import backend as K
 import tensorflow as tf
 from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, BatchNormalization, Input, Flatten, Concatenate, Embedding, Conv1D, MaxPooling1D
+from keras.layers import Dense, Dropout, BatchNormalization, Input, Flatten, Concatenate, Embedding
+from keras.optimizers import Adam
+from keras import regularizers
 
+
+
+# Values to be transferred to config file
 TARGETS = ['yield', 'titer', 'rate']
 NUM_FOLDS = 8
 
 def parse_args():
+    """Create ArgumentParser, set positional arguments, parse and return command line arguments
 
+    Returns:
+        args: str
+            String describing the training mode to run
+    """
     # Create ArgmentParser instance
     parser = argparse.ArgumentParser(
         prog = "training_and_prediction_options",
         description = "Options to use different pipelines for model training and to make predictions"
     )
 
-    mode_choices = ['train', 'train_multi', 'train_gridsearch', 'train_bayes', 'train_nn', 'train_embed_nn', 'train_embed_genotype_nn', 'train_tunable_nn', 'train_automl', 'train_stack']
+    mode_choices = ['train', 'train_multi', 'train_gridsearch', 'train_bayes', 'train_nn', 'train_embed_nn', 'train_embed_genotype_nn', 'train_tunable_nn', 'train_automl', 'train_stack', 'train_stack_nn_catboost', 'train_augmentdata']
 
     # Add positional argument
     parser.add_argument('mode', type=str, choices=mode_choices, metavar='mode', help=f'Mode of operation. Choose one of the following {mode_choices}')
@@ -41,104 +52,9 @@ def parse_args():
   
     return args
 
-# Hardcode filepath for database. To be updated with argpase later
-DB_PATH = "../input/data.sqlite"
-
-"""
-    If sqlite3 conn not closed properly, may need to restart the whole kernel to kill the "orphaned" connection. Else may hit OperationError: database is locked
-"""
-
-def load_sql_data(table_name):
-    """
-    
-    Columns of cleaned_table in data.sqlite
-
-    ['paper_number', 'cs1', 'cs1_mw', 'cs_conc1', 'CS_C1', 'CS_H1', 'CS_O1',
-       'cs2', 'cs2_mw', 'cs_conc2', 'CS_C2', 'CS_H2', 'CS_O2', 'cs3', 'cs3_mw',
-       'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3', 'reactor_type', 'rxt_volume',
-       'media', 'temp', 'oxygen', 'strain_background',
-       'strain_background_genotype', 'strain_background_genotype_modification',
-       'genes_modified', 'gene_deletion', 'gene_overexpression',
-       'heterologous_gene', 'replication_origin', 'codon_optimization',
-       'sensor_regulator', 'enzyme_redesign_evolution', 'protein_scaffold',
-       'dir_evo', 'Mod_path_opt', 'product_name', 'no_C', 'no_H', 'no_O',
-       'no_N', 'mw', 'yield', 'titer', 'rate', 'fermentation_time']
-    
-    """
-
-    database = DB_PATH
-    conn = sqlite3.connect(database)
-
-    # Load data into pandas DataFrame
-    query = f"""SELECT * from {table_name}"""
-    df = pd.read_sql_query(query, conn, index_col="index")
-
-    conn.commit()
-    conn.close()
-
-    print(f"No. of data points in {table_name}: ", len(df))
-
-    return df
 
 
-def save_sql_data(df, table_name="table"):
-    """
-        Examples of table_name
-        "cleaned_data": Containing data that is already corrected and imputed
-        "train_data": Train dataset. Same format as cleaned_data
-        "test_data": Test dataset. Same format as cleaned_data
-    """
 
-    database = DB_PATH
-    conn = sqlite3.connect(database)
-    df.to_sql(name=table_name, con=conn, if_exists="replace")
-    conn.commit()
-    conn.close()
-
-
-def load_split_save_sql_data(table_name, test_size=0.3):
-
-    # cleaned_data: No embedding
-    # cleaned_data_2: Embedding (ave) for strain_background_genotype
-    # cleaned_data_3: Embedding (concat) for strain_background_genotype
-
-    df = load_sql_data(table_name)
-
-    # train test split data
-    train_df, test_df  = train_test_split(df, test_size=test_size, random_state=33)
-
-    # Save data
-    save_sql_data(train_df, "train_data")
-    save_sql_data(test_df, "test_data")
-
-def check_tables_in_db():
-    
-    database = DB_PATH
-    conn = sqlite3.connect(database)
-    cursor = conn.cursor()
-
-    query = """SELECT name FROM sqlite_master WHERE type='table';"""
-
-    cursor.execute(query)
-
-    tables = cursor.fetchall()
-
-    for index, table in enumerate(tables):
-        print(f"Table {index}: ", table[0])
-    
-    cursor.close()
-    conn.close()
-
-    return tables
-
-def load_split_XY(table):
-
-    df = load_sql_data(table)
-
-    X = df.drop(columns=TARGETS, axis=1)
-    y = df[TARGETS]
-
-    return X, y
 
 
 def remove_data_by_mw(df, mw):
@@ -382,6 +298,15 @@ def make_tunable_nn_model(hp):
 
 def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim):
 
+    SEED = 11
+    np.random.seed(SEED)
+    tf.random.set_seed(SEED)
+    random.seed(SEED)
+
+
+    regularization_strength = 0.005
+
+
     # Define input layers
     num_input = Input(shape=(num_features_count, ), name='num_input')
     onehot_input = Input(shape=(onehot_features_count, ), name='onehot_input')
@@ -389,7 +314,7 @@ def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, 
     genotype_input = Input(shape=(20, ), name="genotype_input")
 
     # Define embedding layer for strain_background_genotype_tokenized
-    embedding_output_genotype = Embedding(input_dim=199, output_dim=40, input_length=20)(genotype_input)
+    embedding_output_genotype = Embedding(input_dim=199, output_dim=40, input_length=20, embeddings_regularizer=regularizers.l2(regularization_strength))(genotype_input)
     embedding_output_genotype = Flatten()(embedding_output_genotype)
 
     # Define embedding layer for one-hot features
@@ -403,15 +328,15 @@ def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, 
 
     # Additional blocks of Dense, Dropout and BatchNormalization Layers
     concatenated = Dense(64, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
-    concatenated = Dropout(0.2)(concatenated)
+    concatenated = Dropout(0.2, seed=SEED)(concatenated)
     concatenated = BatchNormalization()(concatenated)
 
     concatenated = Dense(1024, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
-    concatenated = Dropout(0.2)(concatenated)
+    concatenated = Dropout(0.2, seed=SEED)(concatenated)
     concatenated = BatchNormalization()(concatenated)
 
     concatenated = Dense(256, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
-    concatenated = Dropout(0.2)(concatenated)
+    concatenated = Dropout(0.2, seed=SEED)(concatenated)
     concatenated = BatchNormalization()(concatenated)
 
     concatenated = Dense(32, kernel_initializer='glorot_normal', activation='tanh')(concatenated)
@@ -423,7 +348,8 @@ def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, 
     model = Model(inputs=[num_input, onehot_input, genotype_input], outputs=output)
 
     # Compile the model
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=[r_squared])
+    optimizer =  Adam(learning_rate=0.00025)
+    model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=[r_squared])
 
     return model
 

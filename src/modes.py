@@ -1,10 +1,23 @@
+"""AI is creating summary for 
+
+Functions:
+    perform_cross_validation(X_train, y_train, regressor):
+    perform_train_test(X_train, y_train, X_test, y_test, regressor, regressor_name):
+    run_train(X_train, y_train, X_test, y_test):
+    run_train_multi(X_train, y_train, X_test, y_test):
+    run_train_gridsearch(X_train, y_train, X_test, y_test):
+    run_train_bayes(X_train, y_train, X_test, y_test):
+
+"""
+
 import pandas as pd
 import numpy as np
+import random
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.model_selection import cross_val_score, KFold, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score, KFold, GridSearchCV
 from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, StackingRegressor
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.linear_model import LinearRegression, ElasticNet
@@ -68,6 +81,90 @@ def perform_train_test(X_train, y_train, X_test, y_test, regressor, regressor_na
 
     # Evaluate predictions with r2 score and root mean square error
     r2_rmse_score(y_test, y_pred, regressor_name)
+
+    return y_pred
+
+def scale_X_and_Y(X_train, y_train, X_test, y_test, noscale_features):
+
+    numerical_features = [col for col in X_train.columns if col not in noscale_features]
+
+    column_transformer = ColumnTransformer(
+        transformers=[
+            ('scaler', StandardScaler(), numerical_features)
+        ], 
+        remainder='passthrough' # passthrough columns will be placed at the back of the df
+    )
+
+    # Change the order of columns so that passthrough columns are at the back
+    all_columns = numerical_features + noscale_features
+    X_train_reordered = X_train.reindex(columns=all_columns)
+    X_test_reordered = X_test.reindex(columns=all_columns)
+
+    X_train_scaled = column_transformer.fit_transform(X_train_reordered)
+    X_test_scaled = column_transformer.transform(X_test_reordered)
+
+    scalerY = StandardScaler()
+    y_train_scaled = scalerY.fit_transform(y_train)
+    y_test_scaled = scalerY.transform(y_test)
+
+    return X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns
+
+def make_nn_model_1output():
+
+    input_dim = 42
+    output_dim = 1
+
+     # tanh performs much better than ReLU and LeakyReLU
+    model = Sequential()
+    model.add(Dense(64, input_dim=input_dim, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(2048, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(512, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(64, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(Dense(output_dim, activation="tanh"))
+
+    # Compile the model
+    # r_squared uses r2_score from sklearn.preprocessing, not custom defiend
+    model.compile(optimizer='adam', loss="mean_squared_error", metrics=[r_squared])
+
+    return model
+
+def make_nn_model_3outputs():
+
+    input_dim = 42
+    output_dim = 3
+
+     # tanh performs much better than ReLU and LeakyReLU
+    model = Sequential()
+    model.add(Dense(64, input_dim=input_dim, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(2048, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(512, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.15))
+    model.add(Dense(64, kernel_initializer='glorot_normal', activation='tanh'))
+    model.add(Dense(output_dim, activation="tanh"))
+
+    # Compile the model
+    # r_squared uses r2_score from sklearn.preprocessing, not custom defiend
+    model.compile(optimizer='adam', loss="mean_squared_error", metrics=[r_squared])
+
+    return model
+
+
+
+########################################
+##### Functions to run selected modes
+########################################
+
 
 def run_train(X_train, y_train, X_test, y_test):
 
@@ -167,80 +264,8 @@ def run_train_bayes(X_train, y_train, X_test, y_test):
     # Evaluate predictions with r2 score and root mean square error
     r2_rmse_score(y_test, y_pred, "Best BayesSearch Model")
 
-def scale_X_and_Y(X_train, y_train, X_test, y_test, noscale_features):
 
-    numerical_features = [col for col in X_train.columns if col not in noscale_features]
 
-    column_transformer = ColumnTransformer(
-        transformers=[
-            ('scaler', StandardScaler(), numerical_features)
-        ], 
-        remainder='passthrough' # passthrough columns will be placed at the back of the df
-    )
-
-    # Change the order of columns so that passthrough columns are at the back
-    all_columns = numerical_features + noscale_features
-    X_train_reordered = X_train.reindex(columns=all_columns)
-    X_test_reordered = X_test.reindex(columns=all_columns)
-
-    X_train_scaled = column_transformer.fit_transform(X_train_reordered)
-    X_test_scaled = column_transformer.transform(X_test_reordered)
-
-    scalerY = StandardScaler()
-    y_train_scaled = scalerY.fit_transform(y_train)
-    y_test_scaled = scalerY.transform(y_test)
-
-    return X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns
-
-def make_nn_model_1output():
-
-    input_dim = 42
-    output_dim = 1
-
-     # tanh performs much better than ReLU and LeakyReLU
-    model = Sequential()
-    model.add(Dense(64, input_dim=input_dim, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.15))
-    model.add(Dense(2048, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.15))
-    model.add(Dense(512, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.15))
-    model.add(Dense(64, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(Dense(output_dim, activation="tanh"))
-
-    # Compile the model
-    # r_squared uses r2_score from sklearn.preprocessing, not custom defiend
-    model.compile(optimizer='adam', loss="mean_squared_error", metrics=[r_squared])
-
-    return model
-
-def make_nn_model_3outputs():
-
-    input_dim = 42
-    output_dim = 3
-
-     # tanh performs much better than ReLU and LeakyReLU
-    model = Sequential()
-    model.add(Dense(64, input_dim=input_dim, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.15))
-    model.add(Dense(2048, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.15))
-    model.add(Dense(512, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.15))
-    model.add(Dense(64, kernel_initializer='glorot_normal', activation='tanh'))
-    model.add(Dense(output_dim, activation="tanh"))
-
-    # Compile the model
-    # r_squared uses r2_score from sklearn.preprocessing, not custom defiend
-    model.compile(optimizer='adam', loss="mean_squared_error", metrics=[r_squared])
-
-    return model
 
 # def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim):
 
@@ -603,7 +628,127 @@ def run_train_stack(X_train, y_train, X_test, y_test):
     # Evaluate predictions with r2 score and root mean square error
     r2_rmse_score(y_test_scaled, y_pred, "Stacked Ensemble")
 
+# def run_train_stack_nn_catboost(X_train, y_train, X_test, y_test):
+
+#     embedding_dim = 5
+    
+#     noscale_features = ONEHOT_FEATURES + ["strain_background_genotype_tokenized"]
+
+#     # Receive all_columns back to label the new dataframe according to the new order after ColumnTransformer
+#     X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, all_columns = scale_X_and_Y(X_train, y_train, X_test, y_test, noscale_features)
+
+#     X_train_scaled = pd.DataFrame(X_train_scaled, columns=all_columns)
+#     X_test_scaled = pd.DataFrame(X_test_scaled, columns=all_columns)
+
+#     y_train_scaled = pd.DataFrame(y_train_scaled, columns=y_train.columns)
+#     y_test_scaled = pd.DataFrame(y_test_scaled, columns=y_test.columns)
+
+#     train_num = len(X_train_scaled)
+#     test_num = len(X_test_scaled)
+
+#     all_columns_except = all_columns.copy()
+#     all_columns_except.remove("strain_background_genotype_tokenized")
+#     # columns returned as dtype object. Likely because "strain_background_genotype_tokenized" contains list, thus dtype object
+#     # Need to change to float or int to feed to keras layers
+#     for column in all_columns_except:
+#         X_train_scaled[column] = X_train_scaled[column].astype('float64')
+#         X_test_scaled[column] = X_test_scaled[column].astype('float64')
+    
+#     # Combine train and test data into one df and recover the original split by iloc, not train_test_split
+#     # Otherwise simply train test split this combined data will produce a new test set where
+#     # many of the rows are actually from train set and the augmented data rows in the train set
+#     # will be a form of data leakage
+    
+#     X_scaled = pd.concat([X_train_scaled, X_test_scaled], axis=0)
+#     X_scaled = X_scaled.reset_index(drop=True)
+#     y_scaled = pd.concat([y_train_scaled, y_test_scaled], axis=0)
+#     y_scaled = y_scaled.reset_index(drop=True)
+
+#     y_rows = len(y_scaled)
+#     y_cols = len(y_scaled.columns)
+
+#     # Use K-fold for neural network to define a new feature column without data leakage
+
+#     # Define and initialize the number of folds
+#     n_folds = 5
+#     kf = KFold(n_splits=n_folds, shuffle=True)
+
+#     # Initialize assays to store nn predictions
+#     nn_pred = np.zeros((y_rows, y_cols), dtype='float') 
+
+#     # Loop for K folds
+#     for i, (train_index, test_index) in enumerate(kf.split(X_scaled, y_scaled)):
+#         print("Fold: ", i+1)
+#         # Split the data into training and test sets
+#         X_train_kfold, y_train_kfold = X_scaled.iloc[train_index], y_scaled.iloc[train_index]
+#         X_test_kfold, y_test_kfold = X_scaled.iloc[test_index], y_scaled.iloc[test_index]
+
+#         X_train_onehot = X_train_kfold[ONEHOT_FEATURES]
+#         # Important for the data to be accepted by Keras Input
+#         # Change from pd df of dtype object to array of dtype int64
+#         X_train_genotype = np.array(X_train_kfold["strain_background_genotype_tokenized"].tolist())
+#         X_train_num = X_train_kfold.drop(noscale_features, axis=1)
+
+#         X_test_onehot = X_test_kfold[ONEHOT_FEATURES]
+#         # Important for the data to be accepted by Keras Input
+#         # Change from pd df of dtype object to array of dtype int64
+#         X_test_genotype = np.array(X_test_kfold["strain_background_genotype_tokenized"].tolist())
+#         X_test_num = X_test_kfold.drop(noscale_features, axis=1)
+
+#         num_features_count = len(X_train_num.columns)
+#         onehot_features_count = len(X_train_onehot.columns)
+
+#         model = make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim)
+
+#         # Train nn on train fold
+#         model.fit({"num_input": X_train_num, "onehot_input": X_train_onehot, "genotype_input": X_train_genotype}, y_train_kfold, 
+#             batch_size=160, epochs=20)
+        
+#         # Make predict on test fold and store predictions
+#         nn_pred[test_index] = model.predict([X_test_num, X_test_onehot, X_test_genotype])
+    
+#     df_nn_pred = pd.DataFrame(nn_pred, columns=['nn_yield', 'nn_titer', 'nn_rate'])
+
+#     # Need to reset index on X_scaled to merge properly
+#     X_stacked = pd.concat([X_scaled, df_nn_pred], axis=1)
+
+#     X_stacked_train = X_stacked.iloc[:train_num, :]
+#     X_stacked_test = X_stacked.iloc[train_num:, :]
+
+#     y_stacked_train = y_scaled.iloc[:train_num, :]
+#     y_stacked_test = y_scaled.iloc[train_num:, :]
+    
+#     X_stacked_train = X_stacked_train.drop(["strain_background_genotype_tokenized"], axis=1)
+#     X_stacked_test = X_stacked_test.drop(["strain_background_genotype_tokenized"], axis=1)
+
+#     # X_stacked_train, X_stacked_test, y_stacked_train, y_stacked_test = train_test_split(X_stacked, y_scaled, test_size=0.3, random_state=33)
+    
+#     # Create instance of CatBoostRegressor
+#     regressor_stack = CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0)
+#     #regressor = CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0)
+
+#     # Perform cross validation on train data
+#     perform_cross_validation(X_stacked_train, y_stacked_train, regressor_stack)
+
+#     # Fit regressor on train data, then validate with test data
+#     y_pred_stack = perform_train_test(X_stacked_train, y_stacked_train, X_stacked_test, y_stacked_test, regressor_stack, "Stacked nn + CatBoostRegressor")
+
+#     #X_train_scaled = X_train_scaled.drop(["strain_background_genotype_tokenized"], axis=1)
+#     #X_test_scaled= X_test_scaled.drop(["strain_background_genotype_tokenized"], axis=1)
+
+#     #y_pred_rgs = perform_train_test(X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, regressor, "CatBoostRegressor")
+
+#     #y_pred_mix_match = pd.concat([y_pred_rgs['yield'], y_pred_stack['titer'], y_pred_rgs['rate']])
+
+#     #r2_rmse_score(y_test_scaled, y_pred_mix_match, "mix & match")
+    
 def run_train_stack_nn_catboost(X_train, y_train, X_test, y_test):
+
+    SEED = 11
+
+    np.random.seed(SEED)
+    tf.random.set_seed(SEED)
+    random.seed(SEED)
 
     embedding_dim = 5
     
@@ -625,13 +770,6 @@ def run_train_stack_nn_catboost(X_train, y_train, X_test, y_test):
     for column in all_columns_except:
         X_train_scaled[column] = X_train_scaled[column].astype('float64')
         X_test_scaled[column] = X_test_scaled[column].astype('float64')
-    
-    # Can expand the array into individual columns (1 column for each element)
-    # expanded_train_genotype = X_train_scaled["strain_background_genotype_tokenized"].apply(pd.Series)
-    # expanded_train_genotype.columns = [f'genotype_{i+1}' for i in range(expanded_train_genotype.shape[1])]
-    # X_train_scaled = X_train_scaled.drop("strain_background_genotype_tokenized", axis=1)
-    # X_train_scaled = pd.concat([X_train_scaled, expanded_train_genotype], axis=1)
-   
 
     X_train_onehot = X_train_scaled[ONEHOT_FEATURES]
     # Important for the data to be accepted by Keras Input
@@ -648,6 +786,46 @@ def run_train_stack_nn_catboost(X_train, y_train, X_test, y_test):
     num_features_count = len(X_train_num.columns)
     onehot_features_count = len(X_train_onehot.columns)
 
-    # Use K-fold for neural network to define a new feature column without data leakage
+    model = make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count, embedding_dim)
 
-    # Define the number of folds for cross_validation
+    # Train nn on train fold
+    model.fit({"num_input": X_train_num, "onehot_input": X_train_onehot, "genotype_input": X_train_genotype}, y_train_scaled, 
+        batch_size=320, epochs=25)
+    
+    # Make predict on test fold and store predictions
+    train_pred = model.predict([X_train_num, X_train_onehot, X_train_genotype])
+    test_pred = model.predict([X_test_num, X_test_onehot, X_test_genotype])
+    
+    df_train_pred = pd.DataFrame(train_pred, columns=['nn_yield', 'nn_titer', 'nn_rate'])
+    df_test_pred = pd.DataFrame(test_pred, columns=['nn_yield', 'nn_titer', 'nn_rate'])
+
+    # Need to reset index on X_scaled to merge properly
+    X_stacked_train = pd.concat([X_train_scaled, df_train_pred], axis=1)
+    X_stacked_test = pd.concat([X_test_scaled, df_test_pred], axis=1)
+
+    y_stacked_train = y_train_scaled
+    y_stacked_test = y_test_scaled
+    
+    X_stacked_train = X_stacked_train.drop(["strain_background_genotype_tokenized"], axis=1)
+    X_stacked_test = X_stacked_test.drop(["strain_background_genotype_tokenized"], axis=1)
+
+    # X_stacked_train, X_stacked_test, y_stacked_train, y_stacked_test = train_test_split(X_stacked, y_scaled, test_size=0.3, random_state=33)
+    
+    # Create instance of CatBoostRegressor
+    regressor_stack = CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0)
+    #regressor = CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0)
+
+    # Perform cross validation on train data
+    perform_cross_validation(X_stacked_train, y_stacked_train, regressor_stack)
+
+    # Fit regressor on train data, then validate with test data
+    y_pred_stack = perform_train_test(X_stacked_train, y_stacked_train, X_stacked_test, y_stacked_test, regressor_stack, "Stacked nn + CatBoostRegressor")
+
+    #X_train_scaled = X_train_scaled.drop(["strain_background_genotype_tokenized"], axis=1)
+    #X_test_scaled= X_test_scaled.drop(["strain_background_genotype_tokenized"], axis=1)
+
+    #y_pred_rgs = perform_train_test(X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled, regressor, "CatBoostRegressor")
+
+    #y_pred_mix_match = pd.concat([y_pred_rgs['yield'], y_pred_stack['titer'], y_pred_rgs['rate']])
+
+    #r2_rmse_score(y_test_scaled, y_pred_mix_match, "mix & match")
