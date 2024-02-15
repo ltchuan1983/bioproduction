@@ -31,8 +31,8 @@ main.py can be run with various options to train the provided datasets with diff
 python3 main.py <option>
 
 <option>
-1. train ---> CatBoostRegressor /n
-2. train_multi ---> Battery of regressors (CatBoostRegressor,RandomForestRegressor, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machines): python3 main.py train_multi /n
+1. train ---> CatBoostRegressor \n
+2. train_multi ---> Battery of regressors (CatBoostRegressor,RandomForestRegressor, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machines): python3 main.py train_multi \n
 3. train_gridsearch ---> GridSearchCV with CatBoostRegressor
 4. train_bayes ---> BayesSearchCV with CatBoostRegressor
 5. train_nn ---> Dense neural networks with Dropout and BatchNormalization layers
@@ -83,8 +83,6 @@ test_data ---> Test data derived from one of the tables above after train_test_s
 
 Stacked ensemble comprising of neural network (2 embeding layers) and CatBoostRegressor performed best for R<sup>2</sup> and RMSE. However, considering training and prediction efficiency, CatBoostRegressor itself is a good option
 
-![R<sup>2</sup>]
-(r2_score.png)
+![R<sup>2</sup>](r2_score.png)
 
-![RMSE]
-(rmse.png)
+![RMSE](rmse.png)
