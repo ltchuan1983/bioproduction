@@ -97,3 +97,9 @@ Stacked ensemble comprising of neural network (2 embeding layers) and CatBoostRe
 ![R<sup>2</sup>](r2_score.png)
 
 ![RMSE](rmse.png)
+
+# Further Work
+
+COBRA features (metabolic modelling) will be helpful to include information on metabolism. Short of this specialized set of features, embeddings are found to be helpful and can be explored further. In particular, the embeddings in this work are generated from a limited dataset. If there are pre-trained embeddings to represent broader knowledge on how the genes or genotypes are related, model performance should improve dramatically.
+
+Precursor, enzyme steps, ATP cost and NAPH cost are excluded here because of the sheer number of missing values. Should the quality of data for these features can be improved for them to be included, model performance should also improve because these features describe the process complexity and cost for microbes to generate products. 
