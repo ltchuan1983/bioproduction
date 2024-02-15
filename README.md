@@ -26,11 +26,12 @@ pip install -r requirements.txt
 
 ## Model fitting
 
-main.py can be run with various options to train the provided datasets with different models as below.
+main.py can be run with various modes to train the provided datasets with different models as below.
 
-python3 main.py <option>
+python3 main.py <mode>
 
-<option>
+Available modes
+
 1. train ---> CatBoostRegressor
 
 2. train_multi ---> Battery of regressors (CatBoostRegressor,RandomForestRegressor, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machines): python3 main.py train_multi
