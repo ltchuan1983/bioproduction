@@ -31,17 +31,28 @@ main.py can be run with various options to train the provided datasets with diff
 python3 main.py <option>
 
 <option>
-1. train ---> CatBoostRegressor \n
-2. train_multi ---> Battery of regressors (CatBoostRegressor,RandomForestRegressor, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machines): python3 main.py train_multi \n
+1. train ---> CatBoostRegressor
+
+2. train_multi ---> Battery of regressors (CatBoostRegressor,RandomForestRegressor, AdaBoostRegressor, XGBRegressor, LinearRegression, ElasticNet, Support Vector Machines): python3 main.py train_multi
+
 3. train_gridsearch ---> GridSearchCV with CatBoostRegressor
+
 4. train_bayes ---> BayesSearchCV with CatBoostRegressor
+
 5. train_nn ---> Dense neural networks with Dropout and BatchNormalization layers
+
 6. train_embed_nn ---> Dense neural networks with Dropout and BatchNormalization layers PLUS one embedding layer to handle onehot encoded categorical features
+
 7. train_embed_genotype_nn ----> Dense neural networks with Dropout and BatchNormalization layers PLUS one embedding layer to handle onehot encoded categorical features AND one embedding layer to handle genotypes listed in "strain_background_genotype"
+
 8. train_tunable_nn ---> keras_tuner to tune networks used in train_nn
+
 9. train_automl ---> H2O AutoML for automated ML spanning a variety of models
+
 10. train_stack ---> Stack ensemble (using StackingRegressor) where base estimator = CatBoostRegressor and meta estimator = LinearRegression
+
 11. train_stack_nn1embed_catboost ---> Stack ensemble where base estimator = neural network with 1 embedding layer for categorical features (i.e. train_embed_nn) and meta estimator = CatBoostRegressor
+
 12. train_stack_nn2embed_catboost ---> Stack ensemble where base estimator = neural network with 2 embedding layers, one for categorical features and another for genotypes (i.e. train_embed_genotype_nn) and meta estimator = CatBoostRegressor
 
 
