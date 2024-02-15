@@ -509,12 +509,12 @@ def r_squared(y_true, y_pred):
 
     ## Alternative definition of r2_squared
     ## BUT using r2_score to be consistent
-    SS_res = K.sum(K.square(y_true-y_pred))
-    SS_tot = K.sum(K.square(y_true - K.mean(y_true)))
-    return 1 - SS_res/(SS_tot + K.epsilon())
+    # SS_res = K.sum(K.square(y_true-y_pred))
+    # SS_tot = K.sum(K.square(y_true - K.mean(y_true)))
+    # return 1 - SS_res/(SS_tot + K.epsilon())
 
     # Custom defined metric by using tf.py_function as wrapper
-    # return tf.py_function(r2_score, (y_true, y_pred), tf.float64)
+    return tf.py_function(r2_score, (y_true, y_pred), tf.float64)
 
 def perform_cross_validation(X_train, y_train, regressor):
     """

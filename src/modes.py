@@ -89,7 +89,12 @@ np.random.seed(SEED)
 tf.random.set_seed(SEED)
 random.seed(SEED)
 
-# tf.config.run_functions_eagerly(True)
+# Effects of turning on eager execution
+# 1. Training is slower
+# 2. Custom metric R-square matches up properly with final validation R_square computed after 
+# training is completed. If eager execution is off, should use the alternative version instead of r2_score
+#tf.config.run_functions_eagerly(True)
+
 
 ########################################
 ##### Functions to run selected modes
