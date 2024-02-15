@@ -69,6 +69,10 @@ python3 main.py predict --table test_data
 
 New dataset can be saved in similar tables and be used to make predictions given that the dataset contains the same features. 
 
+## Hyperparamter
+
+Hyperparameters can be modified via config.yaml
+
 # Available tables in data.sqlite
 
 cleaned_table ---> Data derived from original source after imputation and cleaning
