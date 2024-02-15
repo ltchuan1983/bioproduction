@@ -28,7 +28,7 @@ pip install -r requirements.txt
 
 main.py can be run with various modes to train the provided datasets with different models as below.
 
-python3 main.py <mode>
+python3 main.py [mode]
 
 Available modes
 
@@ -59,11 +59,11 @@ Available modes
 
 ## Prediction
 
-main.py can also be run with <predict> to generate predictions on dataset contained in sqlite3 table <table_name>
+main.py can also be run with <predict> to generate predictions on dataset contained in sqlite3 table [table_name]
 
-python3 main.py predict --table <table_name>
+python3 main.py predict --table [table_name]
 
-Default data for generating predictions is found in the table <test_data> (which includes a feature containing genotypes tokenized to integers). To make predictions on this dataset, run:
+Default data for generating predictions is found in the table [test_data] (which includes a feature containing genotypes tokenized to integers). To make predictions on this dataset, run:
 
 python3 main.py predict --table test_data
 
