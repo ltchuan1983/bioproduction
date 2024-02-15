@@ -1,9 +1,7 @@
 """
-singleton template
+Singleton template to ensure only one config instance 
 
-Returns:
-    [type]: [description]
-    """
+"""
 import yaml
 
 class Config:

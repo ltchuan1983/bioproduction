@@ -30,20 +30,19 @@ def main():
         cleaned_table_3 ---> Includes embedding vectors (aggregated via appending) on strain_background_genotype
     2. Run CatBoostRegressor in both CV and train_test ways for augmented data.
         Can also use among cleaned_table, cleaned_table_2 or cleaned_table_3
-    3. Run predefined list of regressor. Ask for which db to use. Ask to save model or not.
-    4. Run GridSearchCV hyperparameter tuning for CatBoostRegressor
-    5. Run BayesSearchCV hyperparameter tuning for CatBoostRegressor
-    6. Run neural network
-    7. Run neural network (Onehot_encoded categorical features fed into Embedding Layer)
-    8. Run neural network (2 separate embedding layers for onehot encoded categorical features and strain_background_genotype)   
-    9. Run hyperparameter tuning for neural network using Keras Tuner
-    10. Run H2O AutoML
-    11. Run stacking (CatBoostRegressor -> LinearRegression)
-    12. Run stacking (neural network -> CatBoostRegressor)
+    3. Run GridSearchCV hyperparameter tuning for CatBoostRegressor
+    4. Run BayesSearchCV hyperparameter tuning for CatBoostRegressor
+    5. Run neural network
+    6. Run neural network (Onehot_encoded categorical features fed into Embedding Layer)
+    7. Run neural network (2 separate embedding layers for onehot encoded categorical features and strain_background_genotype)   
+    8. Run hyperparameter tuning for neural network using Keras Tuner
+    9. Run H2O AutoML
+    10. Run stacking (CatBoostRegressor -> LinearRegression)
+    11. Run stacking (neural network -> CatBoostRegressor)
         Use augmented data as well as 1 embedding layer for onehot encoded categorical features
-    13. Run stacking (neural network -> CatBoostRegressor)
+    12. Run stacking (neural network -> CatBoostRegressor)
         Use augmented data as well as 2 separate embedding layers for onehot encoded categorical features and strain_background_genotype
-    14. Use saved model to predict
+    13. Use saved model to predict
 
     """
 
@@ -54,43 +53,36 @@ def main():
         run_train(X_train, y_train, X_test, y_test)
 
     #2
-    if MODE == "train_augmentdata":
-        # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
-        # Same as mode=="train" when augmentation = 0
-        X_train, y_train, X_test, y_test = load_and_augment_targets("cleaned_data")
-        run_train(X_train, y_train, X_test, y_test)
-
-    #3
     if MODE == "train_multi":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_multi(X_train, y_train, X_test, y_test)
 
-    #4
+    #3
     if MODE == "train_gridsearch":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_gridsearch(X_train, y_train, X_test, y_test)
 
-    #5
+    #4
     if MODE == "train_bayes":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_bayes(X_train, y_train, X_test, y_test)
     
-    #6
+    #5
     if MODE == "train_nn":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_nn(X_train, y_train, X_test, y_test)
 
-    #7
+    #6
     if MODE == "train_embed_nn":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_embed_nn(X_train, y_train, X_test, y_test)
 
-    #8
+    #7
     if MODE == "train_embed_genotype_nn":
         # Data source msut be cleaned_data_4
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data_4')
@@ -98,32 +90,32 @@ def main():
         convert_to_num_lists(X_test, ["strain_background_genotype_tokenized"])
         run_train_embed_genotype_nn(X_train, y_train, X_test, y_test)
     
-    #9
+    #8
     if MODE == "train_tunable_nn":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_tunable_nn(X_train, y_train, X_test, y_test)
 
-    #10
+    #9
     if MODE == "train_automl":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         run_train_automl(X_train, y_train, X_test, y_test)
     
-    #11
+    #10
     if MODE == "train_stack":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         X_train, y_train, X_test, y_test = load_and_augment_targets('cleaned_data')
         run_train_stack(X_train, y_train, X_test, y_test)
 
-    #12
+    #11
     if MODE == "train_stack_nn1embed_catboost":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         # X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
         X_train, y_train, X_test, y_test = load_and_augment_features("cleaned_data")
         run_train_stack_nn1embed_catboost(X_train, y_train, X_test, y_test)
 
-    #13
+    #12
     if MODE == "train_stack_nn2embed_catboost":
         # Data source must be cleaned_data_4
         X_train, y_train, X_test, y_test = load_and_augment_features("cleaned_data_4")
@@ -131,12 +123,11 @@ def main():
         convert_to_num_lists(X_test, ["strain_background_genotype_tokenized"])
         run_train_stack_nn2embed_catboost(X_train, y_train, X_test, y_test)
 
-    # 14
+    # 13
     # Need to specify optional argument <table_name> to read test data from 
     if MODE == "predict":
         X_test, y_test = load_test_data(args.table)
         convert_to_num_lists(X_test, ["strain_background_genotype_tokenized"])
-        print(type(X_test['strain_background_genotype_tokenized'][438]))
         run_predict(X_test, y_test)
     
 

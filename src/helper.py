@@ -36,6 +36,19 @@ from config import Config
 
 config = Config()
 
+SEED = config.config_data['SEED']
+
+ONEHOT_EMBED_DIM = config.config_data['ONEHOT_EMBED_DIM']
+GENOTYPE_EMBED_DIM = config.config_data['GENOTYPE_EMBED_DIM']
+
+TOKENIZED_GENOTYPE_LEN = config.config_data['TOKENIZED_GENOTYPE_LEN']
+REGULARIZATION_STRENGTH = config.config_data['REGULARIZATION_STRENGTH']
+LEARNING_RATE = config.config_data['LEARNING_RATE']
+
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+random.seed(SEED)
+
 
 def parse_args():
     """Create ArgumentParser, set positional arguments, parse and return command line arguments
@@ -496,12 +509,12 @@ def r_squared(y_true, y_pred):
 
     ## Alternative definition of r2_squared
     ## BUT using r2_score to be consistent
-    # SS_res = K.sum(K.square(y_true-y_pred))
-    # SS_tot = K.sum(K.square(y_true - K.mean(y_true)))
-    # return 1 - SS_res/(SS_tot + K.epsilon())
+    SS_res = K.sum(K.square(y_true-y_pred))
+    SS_tot = K.sum(K.square(y_true - K.mean(y_true)))
+    return 1 - SS_res/(SS_tot + K.epsilon())
 
     # Custom defined metric by using tf.py_function as wrapper
-    return tf.py_function(r2_score, (y_true, y_pred), tf.float64)
+    # return tf.py_function(r2_score, (y_true, y_pred), tf.float64)
 
 def perform_cross_validation(X_train, y_train, regressor):
     """
@@ -527,10 +540,6 @@ def perform_train_test(X_train, y_train, X_test, y_test, regressor, regressor_na
     """
     Function to fit regressor on train data and make predict on test data
 
-    Includes ranking and displaying feature importances
-    Includes filtering features of low importances
-    Threshold set by IMPORTANCE_THRESHOLD defined in config e.g. 0.5
-
     Args:
         X_train (DataFrame or array): Features in train data
         y_train (DataFrame or array): Targets in train data
@@ -543,43 +552,73 @@ def perform_train_test(X_train, y_train, X_test, y_test, regressor, regressor_na
         y_pred_reduced (DataFrame): Predictions from reduced set of features
     """
 
-    IMPORTANCE_THRESHOLD = config.config_data['IMPORTANCE_THRESHOLD']
+
     
     regressor.fit(X_train, y_train) # should save model
 
     y_pred = regressor.predict(X_test)
 
-    # # y_pred output from pipe is numpy.array, so need to convert
-    # y_pred = pd.DataFrame(y_pred, columns=['yield', 'titer', 'rate'])
+    r2_rmse_score(y_test, y_pred, regressor_name)
 
-    # # Evaluate predictions with r2 score and root mean square error
-    # r2_rmse_score(y_test, y_pred, regressor_name)
+    return regressor
 
-    feature_importances = zip(X_train.columns, regressor.feature_importances_)
+def extract_features_to_filter(feature_columns, regressor, DISPLAY_IMPORTANCES=True):
+    """Extract feature importances from the regressor and specify features with low importance (below a threshold)
+
+    Args:
+        feature_columns (list): List of column headings for features
+        regressor (object): Regressor that has been fitted
+        DISPLAY_IMPORTANCES (bool, optional): Display the importances of each feature. Defaults to True.
+
+    Returns:
+        [type]: [description]
+    """
+
+    IMPORTANCE_THRESHOLD = config.config_data['IMPORTANCE_THRESHOLD']
+    
+    feature_importances = zip(feature_columns, regressor.feature_importances_)
 
     sorted_feature_importances = sorted(feature_importances, key=lambda x:x[1], reverse=True)
 
-    for item in sorted_feature_importances:
-        print(item[0], '---->', item[1])
+    if DISPLAY_IMPORTANCES:
+        for item in sorted_feature_importances:
+            print(item[0], '---->', item[1])
     
     features_to_filter = [feature for feature, importance in sorted_feature_importances if importance < IMPORTANCE_THRESHOLD]
 
-    # X_train_reduced = X_train.drop(features_to_filter, axis=1)
-    # X_test_reduced = X_test.drop(features_to_filter, axis=1)
-
-    # regressor_reduced = CatBoostRegressor(n_estimators=1000, loss_function='MultiRMSE', verbose=0)
-
-    # regressor_reduced.fit(X_train_reduced, y_train)
-
-    # y_pred_reduced = regressor_reduced.predict(X_test_reduced)
-
-    # # y_pred output from pipe is numpy.array, so need to convert
-    # y_pred_reduced = pd.DataFrame(y_pred_reduced, columns=['yield', 'titer', 'rate'])
-
-    # # Evaluate predictions with r2 score and root mean square error
-    # r2_rmse_score(y_test, y_pred_reduced, regressor_name+' filter features')
-
     return features_to_filter
+
+def perform_train_test_reduced_features(X_train, y_train, X_test, y_test, features_to_filter, regressor, regressor_name):
+    """
+    Function to fit regressor on train data with reduced feature set and 
+    make predict on test data (also with reduced feature set)
+    
+    Args:
+        X_train (DataFrame or array): Features in train data
+        y_train (DataFrame or array): Targets in train data
+        X_test (DataFrame or array): Features in test data
+        y_test (DataFrame or array): Targets in test data
+        features_to_filter: List of features to remove due to low importances
+        regressor (object): Regressor model instance
+        regressor_name (str): Name of regressor to be displayed with scores
+    
+    Returns:
+        y_pred_reduced (DataFrame): Predictions from reduced set of features
+        regressor (Object): Regressor fitted on train data with reduced feature set
+    """
+    X_train_reduced = X_train.drop(features_to_filter, axis=1)
+    X_test_reduced = X_test.drop(features_to_filter, axis=1)
+
+    regressor.fit(X_train_reduced, y_train)
+
+    y_pred_reduced = regressor.predict(X_test_reduced)
+
+    # y_pred output from pipe is numpy.array, so need to convert
+    y_pred_reduced = pd.DataFrame(y_pred_reduced, columns=['yield', 'titer', 'rate'])
+
+    # Evaluate predictions with r2 score and root mean square error
+    r2_rmse_score(y_test, y_pred_reduced, regressor_name + ' filter features')
+    return y_pred_reduced, regressor
 
 ##############################################
 #### Functions to create neural network models
@@ -587,6 +626,8 @@ def perform_train_test(X_train, y_train, X_test, y_test, regressor, regressor_na
 
 
 def make_nn_model_1output():
+    """ Create keras model to predict 1 target 
+    """
 
     input_dim = 42
     output_dim = 1
@@ -612,6 +653,8 @@ def make_nn_model_1output():
     return model
 
 def make_nn_model_3outputs():
+    """ Create keras model to predict 3 targets concurrently
+    """
 
     input_dim = 42
     output_dim = 3
@@ -720,15 +763,6 @@ def make_nn_model_embed_cat(num_features_count, onehot_features_count):
         model: Keras neural network model
     """
 
-    SEED = config.config_data['SEED']
-
-    ONEHOT_EMBED_DIM = config.config_data['ONEHOT_EMBED_DIM']
-    LEARNING_RATE = config.config_data['LEARNING_RATE']
-
-    np.random.seed(SEED)
-    tf.random.set_seed(SEED)
-    random.seed(SEED)
-
     # Define input layers
     num_input = Input(shape=(num_features_count, ), name='num_input')
     onehot_input = Input(shape=(onehot_features_count, ), name='onehot_input')
@@ -782,19 +816,6 @@ def make_nn_model_embed_cat_genotype(num_features_count, onehot_features_count):
     Returns:
         model: Keras neural network model
     """
-
-    SEED = config.config_data['SEED']
-
-    ONEHOT_EMBED_DIM = config.config_data['ONEHOT_EMBED_DIM']
-    GENOTYPE_EMBED_DIM = config.config_data['GENOTYPE_EMBED_DIM']
-
-    TOKENIZED_GENOTYPE_LEN = config.config_data['TOKENIZED_GENOTYPE_LEN']
-    REGULARIZATION_STRENGTH = config.config_data['REGULARIZATION_STRENGTH']
-    LEARNING_RATE = config.config_data['LEARNING_RATE']
-
-    np.random.seed(SEED)
-    tf.random.set_seed(SEED)
-    random.seed(SEED)
 
     # Define input layers
     num_input = Input(shape=(num_features_count, ), name='num_input')

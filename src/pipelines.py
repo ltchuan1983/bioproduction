@@ -397,6 +397,14 @@ def load_and_augment_features(table_name):
     return augmented_X_train, augmented_y_train, X_test, y_test
 
 def load_test_data(table):
+    """Load data from specified table for predictions
+
+    Args:
+        table (str): Name of table containing test data
+
+    Returns:
+        X_test, y_test (pd DataFrame): Feature and target values of test data
+    """
     X_test, y_test = load_split_XY(table)
     
     preprocessor = create_preprocessor()
