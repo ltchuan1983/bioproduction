@@ -69,7 +69,7 @@ python3 main.py predict --table test_data
 
 New dataset can be saved in similar tables and be used to make predictions given that the dataset contains the same features. 
 
-## Hyperparamter
+## Hyperparameters
 
 Hyperparameters can be modified via config.yaml
 
