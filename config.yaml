@@ -1,1 +1,38 @@
+SEED: 11
+
+DB_PATH: "../input/data.sqlite"
+
+ONEHOT_EMBED_DIM: 5
+GENOTYPE_EMBED_DIM: 40
+TOKENIZED_GENOTYPE_LEN: 20
+REGULARIZATION_STRENGTH: 0.005
+LEARNING_RATE: 0.00025
+
+AUGMENT_NUM: 20
+AUGMENT_RANGE: 0.05
+
+BATCH_SIZE: 32
+AUG_BATCH_SIZE: 356
+EPOCHS: 25
+
+GENE_STRING_FEATURES: ["strain_background_genotype", "genes_modified"]
+GENE_NUMLIST_FEATURES: ['strain_background_genotype_modification', 'gene_deletion', 'gene_overexpression', 
+    'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 
+    'enzyme_redesign_evolution', 'protein_scaffold']
+CATEGORICAL_FEATURES: ['reactor_type', 'media', 'oxygen']
+INFO_FEATURES: ['paper_number', 'strain_background', 'product_name']
+CARBON_SOURCES_FEATURES: ['cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
+TARGETS: ['yield', 'titer', 'rate']
 features_to_drop: ['paper_number', 'cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
+
+ONEHOT_FEATURES: ['dir_evo', 'Mod_path_opt', 'reactor_type_1.0', 'reactor_type_2.0', 'reactor_type_3.0', 
+                    'media_LB', 'media_M9', 'media_MOPS', 'media_NBS', 'media_RICH',
+                    'media_TB', 'media_YE', 'oxygen_1.0', 'oxygen_2.0', 'oxygen_3.0']
+
+IMPORTANCE_THRESHOLD: 0.5
+
+NUM_FOLDS: 8
+LEARNING_RATE_PARAM: [0.05, 0.1, 0.2]
+N_ESTIMATORS_PARAM: [1000, 2000]
+TREES_DEPTH_PARAM: [4, 6, 8]
+L2_LEAF_REG_PARAM: [1, 5, 10]

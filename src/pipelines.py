@@ -1,50 +1,41 @@
-
 """
+    Pipelines Module
 
-Pipelines Module
+    This module provides various pipelines for loading data, preprocessing data and fitting regressor
 
-This module provides various pipelines for loading data, preprocessing data and fitting regressor
-
-
-Functions:
-    create_preprocessor():
-    create_pipe(regressor):
-    load_sql_data(table_name):
-    save_sql_data(df, table_name="table"):
-    load_split_XY(table):
-    load_split_save_sql_data(table_name, test_size=0.3):
-    load_split_preprocess(table_name):
-    load_and_augment(table_name):
-    check_tables_in_db():
-
-
-
-
-
-"""
-
-
-"""
-    
     Columns of cleaned_table in data.sqlite
 
     ['paper_number', 'cs1', 'cs1_mw', 'cs_conc1', 'CS_C1', 'CS_H1', 'CS_O1',
-       'cs2', 'cs2_mw', 'cs_conc2', 'CS_C2', 'CS_H2', 'CS_O2', 'cs3', 'cs3_mw',
-       'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3', 'reactor_type', 'rxt_volume',
-       'media', 'temp', 'oxygen', 'strain_background',
-       'strain_background_genotype', 'strain_background_genotype_modification',
-       'genes_modified', 'gene_deletion', 'gene_overexpression',
-       'heterologous_gene', 'replication_origin', 'codon_optimization',
-       'sensor_regulator', 'enzyme_redesign_evolution', 'protein_scaffold',
-       'dir_evo', 'Mod_path_opt', 'product_name', 'no_C', 'no_H', 'no_O',
-       'no_N', 'mw', 'yield', 'titer', 'rate', 'fermentation_time']
+        'cs2', 'cs2_mw', 'cs_conc2', 'CS_C2', 'CS_H2', 'CS_O2', 'cs3', 'cs3_mw',
+        'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3', 'reactor_type', 'rxt_volume',
+        'media', 'temp', 'oxygen', 'strain_background',
+        'strain_background_genotype', 'strain_background_genotype_modification',
+        'genes_modified', 'gene_deletion', 'gene_overexpression',
+        'heterologous_gene', 'replication_origin', 'codon_optimization',
+        'sensor_regulator', 'enzyme_redesign_evolution', 'protein_scaffold',
+        'dir_evo', 'Mod_path_opt', 'product_name', 'no_C', 'no_H', 'no_O',
+        'no_N', 'mw', 'yield', 'titer', 'rate', 'fermentation_time']
 
-        Examples of table_name
-        "cleaned_data": Containing data that is already corrected and imputed
-        "train_data": Train dataset. Same format as cleaned_data
-        "test_data": Test dataset. Same format as cleaned_data
-    
-    """
+    Tables in db:
+    "cleaned_data": Containing data that is already corrected and imputed
+    "cleaned_data_2": Data where strain_background_genotype already converted to embeddings via unsupervised word2vec and averaging embedding per token
+    "cleaned_data_3": Data where strain_background_genotype already converted to embeddings via unsupervised word2vec and appending embedding per token
+    "cleaned_data_4": Data where strain_background_genotype only tokenized for supervised embeddings within the neural network itself
+    "train_data": Train dataset. Same format as cleaned_data
+    "test_data": Test dataset. Same format as cleaned_data
+
+    Functions:
+        create_preprocessor(): Create pipeline to preprocess data loaded from sqlite3 db
+        create_pipe(regressor): Create pipeline covering both preprocessing and regressor fitting/predictions
+        load_sql_data(table_name): Load data from specified table in sqlite3 db
+        save_sql_data(df, table_name="table"): Save data to specified table in sqlite3 db. Replace if exists
+        load_split_XY(table): Load data from specified table in sqlite3 db and split into features and targets
+        load_split_save_sql_data(table_name, test_size=0.3):Load data from specified table in sqlite3 db, train_test_split and save to specified tables
+        load_split_preprocess(table_name): Load data from specified table in sqlite3 db and preprocess with pipeline above
+        load_and_augment_targets(table_name): Load data from specified table in sqlite3, preprocess and perform data augmentation (by varying target values)
+        load_and_augment_features(table_name): Load data from specified table in sqlite3, preprocess and perform data augmentation (by varying feature values)
+        check_tables_in_db(): Loop through every table and print its name
+"""
 
 import pandas as pd
 import numpy as np
@@ -56,64 +47,59 @@ from sklearn.pipeline import Pipeline
 
 from helper import create_gene_list, count_genes, convert_to_num_lists, tally_num_lists, onehot_encode, remove_features
 
+from config import Config
+
 #### KEY VARIABLES
 
 # Hardcode filepath for database. To be updated with argpase later
 # If sqlite3 conn not closed properly, may need to restart the whole kernel to kill the "orphaned" connection. Else may hit OperationError: database is locked
 
-DB_PATH = "../input/data.sqlite"
+config = Config()
 
-gene_string_features = ["strain_background_genotype", "genes_modified"]
-
-gene_numlist_features = ['strain_background_genotype_modification', 'gene_deletion', 'gene_overexpression', 
-    'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 
-    'enzyme_redesign_evolution', 'protein_scaffold']
-
-CATEGORICAL_FEATURES = ['reactor_type', 'media', 'oxygen']
-
-INFO_FEATURES = ['paper_number', 'strain_background', 'product_name']
-CARBON_SOURCES_FEATURES = ['cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
-
-TARGETS = ['yield', 'titer', 'rate']
+DB_PATH = config.config_data['DB_PATH']
+GENE_STRING_FEATURES = config.config_data['GENE_STRING_FEATURES']
+GENE_NUMLIST_FEATURES = config.config_data['GENE_NUMLIST_FEATURES']
+CATEGORICAL_FEATURES = config.config_data['CATEGORICAL_FEATURES']
+INFO_FEATURES = config.config_data['INFO_FEATURES']
+CARBON_SOURCES_FEATURES = config.config_data['CARBON_SOURCES_FEATURES']
+TARGETS = config.config_data['TARGETS']
 
 #########################################
 #### Functions to create pipeline objects
 #########################################
 
-"""
-    Preprocessing Pipeline:
-    _______________________
-
-    Assume new test data will also be provided in the same form as the existing data in data.sqlite3
-
-    1. Gene_Lister: Turn strings in ["strain_background_genotype", "genes_modified"] into list of strings
-    2. Gene_Counter: Count number of genes in the columns in step 1
-    3. Eng_Gene_NumLister: Convert the following columns from strings into actual lists
-    
-    ['strain_background_genotype_modification', 'gene_deletion', 'gene_overexpression', 
-    'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 
-    'enzyme_redesign_evolution', 'protein_scaffold']
-
-    4. Eng_Gene_Tally: Sum up numbers in the lists for the columns in step 2 (except gene deletion and protein scaffold whose values are all zero))
-    5. Perform one-hot encoding on the following columns
-
-    ['reactor_type', 'media', 'oxygen']
-
-    6. Feature_Remover: Drop the following columns
-
-    Info_features: ['paper', 'product_name']
-    Carbon_sources_columns: ['cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
-    Gene string columns: ["strain_background_genotype", "genes_modified"]
-    Gene number columns: ['strain_background_genotype_modification', 'gene_deletion', 'gene_overexpression', 
-    'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 
-    'enzyme_redesign_evolution', 'protein_scaffold']
-
-
-"""
-
 def create_preprocessor():
     """ Function to create pipeline object that can injest DataFrame and preprocess
+
+        Preprocessing Pipeline:
+        _______________________
+
+        Assume new test data will also be provided in the same form as the existing data in data.sqlite3
+
+        1. Gene_Lister: Turn strings in ["strain_background_genotype", "genes_modified"] into list of strings
+        2. Gene_Counter: Count number of genes in the columns in step 1
+        3. Eng_Gene_NumLister: Convert the following columns from strings into actual lists
+        
+        ['strain_background_genotype_modification', 'gene_deletion', 'gene_overexpression', 
+        'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 
+        'enzyme_redesign_evolution', 'protein_scaffold']
+
+        4. Eng_Gene_Tally: Sum up numbers in the lists for the columns in step 2 (except gene deletion and protein scaffold whose values are all zero))
+        5. Perform one-hot encoding on the following columns
+
+        ['reactor_type', 'media', 'oxygen']
+
+        6. Feature_Remover: Drop the following columns
+
+        Info_features: ['paper', 'product_name']
+        Carbon_sources_columns: ['cs1', 'cs2', 'cs3', 'cs3_mw', 'cs_conc3', 'CS_C3', 'CS_H3', 'CS_O3']
+        Gene string columns: ["strain_background_genotype", "genes_modified"]
+        Gene number columns: ['strain_background_genotype_modification', 'gene_deletion', 'gene_overexpression', 
+        'heterologous_gene', 'replication_origin', 'codon_optimization','sensor_regulator', 
+        'enzyme_redesign_evolution', 'protein_scaffold']
+
         Preprocessing steps:
+        ____________________
         Gene_Lister: Convert strings into lists of strings
         Gene_Counter: Count the number of genes (strings) in each list
         Eng_Gene_NumLister: Convert strings into lists of numbers
@@ -125,17 +111,17 @@ def create_preprocessor():
         preprocessor (Pipeline object): Pipeline object that can be used to fit_transform training data and transformt test data
     """
 
-    Gene_Lister = FunctionTransformer(create_gene_list, kw_args={'gene_string_features': gene_string_features})
+    Gene_Lister = FunctionTransformer(create_gene_list, kw_args={'gene_string_features': GENE_STRING_FEATURES})
     # count_genes uses another function count_genes_per_row in helper_py, but no need to import the latter
-    Gene_Counter = FunctionTransformer(count_genes, kw_args={'gene_string_features': gene_string_features})
+    Gene_Counter = FunctionTransformer(count_genes, kw_args={'gene_string_features': GENE_STRING_FEATURES})
     # convert_to_num_lists uses another function convert_to_num_list_per_row in helper_py, but no need to import the latter
-    Eng_Gene_NumLister = FunctionTransformer(convert_to_num_lists, kw_args={'gene_numlist_features': gene_numlist_features})
+    Eng_Gene_NumLister = FunctionTransformer(convert_to_num_lists, kw_args={'gene_numlist_features': GENE_NUMLIST_FEATURES})
 
-    Eng_Gene_Tally = FunctionTransformer(tally_num_lists, kw_args={'gene_numlist_features': gene_numlist_features})
+    Eng_Gene_Tally = FunctionTransformer(tally_num_lists, kw_args={'gene_numlist_features': GENE_NUMLIST_FEATURES})
 
     OneHot_Encoder = FunctionTransformer(onehot_encode, kw_args={'categorical_features': CATEGORICAL_FEATURES})
 
-    FEATURES_TO_DROP = INFO_FEATURES + CARBON_SOURCES_FEATURES + gene_string_features + gene_numlist_features + ['gene_deletion_num', 'protein_scaffold_num']
+    FEATURES_TO_DROP = INFO_FEATURES + CARBON_SOURCES_FEATURES + GENE_STRING_FEATURES + GENE_NUMLIST_FEATURES + ['gene_deletion_num', 'protein_scaffold_num']
     Remover =  FunctionTransformer(remove_features, kw_args={'features_to_drop': FEATURES_TO_DROP})
 
     preprocessor = Pipeline([
@@ -145,11 +131,6 @@ def create_preprocessor():
         ('eng_gene_tally', Eng_Gene_Tally),
         ('onehot', OneHot_Encoder),
         ('remover', Remover)
-        # ('categorical_column', ColumnTransformer(
-        #                 transformers=[('one_hot', OneHotEncoder(), CATEGORICAL_FEATURES)], remainder='passthrough')
-        #             ),
-        # ('to_DataFrame', FunctionTransformer(lambda x: pd.DataFrame(x)))
-
     ])
 
     return preprocessor
@@ -161,7 +142,7 @@ def create_pipe(regressor):
         regressor (regressor object): Regressor object that can be inserted into a pipe
 
     Returns:
-        pipe [pipeline object]: Pipe containing both preprocessor and regressor
+        pipe (pipeline object): Pipe containing both preprocessor and regressor
     """
 
     Preprocessor = create_preprocessor()
@@ -254,6 +235,11 @@ def load_split_save_sql_data(table_name, test_size=0.3):
 
     df = load_sql_data(table_name)
 
+    # Remove more outliers
+    df.drop(df[df['yield']>1].index, axis=0, inplace=True)
+    df.drop(df[df['titer']>60].index, axis=0, inplace=True)
+    df.drop(df[df['rate']>1.8].index, axis=0, inplace=True)
+
     # train test split data
     train_df, test_df  = train_test_split(df, test_size=test_size, random_state=33)
 
@@ -290,9 +276,9 @@ def load_split_preprocess(table_name):
 
     return X_train, y_train, X_test, y_test
 
-def load_and_augment(table_name):
+def load_and_augment_targets(table_name):
     """ Load data from specified table to update train_data and test_data tables
-        Augment the data by creating new rows with slightly adjusted yield, titer and rates (within t %) from each point
+        Augment TARGET VALUES by creating new rows with slightly adjusted yield, titer and rates (within t %) from each point
         Augmentation controlled by AUGMENT_NUM and MIN_ADJUST / MAX_ADJUST
         Augmented data split into features and targets.
         Preprocess features (e.g. aggregate list of numbers into sum)
@@ -347,6 +333,76 @@ def load_and_augment(table_name):
 
     return augmented_X_train, augmented_y_train, X_test, y_test
 
+def load_and_augment_features(table_name):
+    """ Load data from specified table to update train_data and test_data tables
+        Augment select FEATURE VALUES by creating new rows with slightly adjustments (within t %) from each point
+        Augmentation controlled by AUGMENT_NUM and MIN_ADJUST / MAX_ADJUST
+        Augmented data split into features and targets.
+        Preprocess features (e.g. aggregate list of numbers into sum)
+        Return augmented data can be fed into subsequent modeling fitting
+
+    Args:
+        table_name (str): Name of table to load data from
+
+    Returns:
+        X_train (DataFrame), y_train (DataFrame), X_test (DataFrame), y_test (DataFrame)
+    """
+
+    # Prepare and save train and test 
+    load_split_save_sql_data(table_name, test_size=0.3)
+    tables = check_tables_in_db()
+
+    # Load train and test data from sqlite db. Still needs further preprocessing.
+    df_train = load_sql_data("train_data")
+    df_test = load_sql_data("test_data")
+
+
+    # Preprocess X_train and X_test
+    preprocessor = create_preprocessor()
+    df_train = preprocessor.fit_transform(df_train)
+    df_test = preprocessor.transform(df_test)
+
+    features_to_augment = ['cs_conc1', 'cs_conc2', 'rxt_volume', 'temp', 'fermentation_time',
+                           'strain_background_genotype_num', 'genes_modified_num', 'strain_background_genotype_modification_num',
+                           'gene_overexpression_num', 'heterologous_gene_num', 'replication_origin_num', 'codon_optimization_num',
+                           'sensor_regulator_num', 'enzyme_redesign_evolution_num']
+
+    # Augment features instead of target values
+
+    AUGMENT_NUM=config.config_data['AUGMENT_NUM']
+    MIN_ADJUST = -config.config_data['AUGMENT_RANGE']
+    MAX_ADJUST=config.config_data['AUGMENT_RANGE'] # e.g. 5%
+    LEN = len(df_train)
+
+    augmented_df_train = df_train.copy()
+
+    for i in range(AUGMENT_NUM):
+        adjusted_df_train = df_train.copy()
+        adjustments = []
+        for i, feature in enumerate(features_to_augment):
+
+            adjustment = np.random.uniform(MIN_ADJUST, MAX_ADJUST, size=LEN)
+            adjusted_df_train[feature] += adjusted_df_train[feature] * adjustment
+
+        augmented_df_train = pd.concat([augmented_df_train, adjusted_df_train],axis=0)
+    
+    augmented_df_train = augmented_df_train.reset_index(drop=True)
+
+    augmented_X_train = augmented_df_train.drop(columns=TARGETS, axis=1)
+    augmented_y_train = augmented_df_train[TARGETS]
+
+    X_test = df_test.drop(columns=TARGETS, axis=1)
+    y_test = df_test[TARGETS]
+
+    return augmented_X_train, augmented_y_train, X_test, y_test
+
+def load_test_data(table):
+    X_test, y_test = load_split_XY(table)
+    
+    preprocessor = create_preprocessor()
+    X_test = preprocessor.fit_transform(X_test)
+    
+    return X_test, y_test
 
 def check_tables_in_db():
     """ Check, print and return the list of tables found in database
@@ -355,8 +411,7 @@ def check_tables_in_db():
         tables (list): List of strings specifying the names of existing tables
     """
     
-    database = DB_PATH
-    conn = sqlite3.connect(database)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     query = """SELECT name FROM sqlite_master WHERE type='table';"""

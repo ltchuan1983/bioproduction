@@ -7,19 +7,11 @@ Function:
     main: Run pipeline when the module is executed as the main program, depending on the argument at command line
 """
 
-import argparse
-import json
-import yaml
-from joblib import dump, load
-import sys
-
 import pandas as pd
-import numpy as np
 
 from helper import parse_args, remove_data_by_mw, r2_rmse_score
-from pipelines import load_sql_data, load_split_save_sql_data, load_split_XY, check_tables_in_db, load_split_preprocess, load_and_augment
-from pipelines import create_pipe, create_preprocessor
-from modes import perform_cross_validation, perform_train_test, run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn, run_train_embed_nn, run_train_embed_genotype_nn, run_train_tunable_nn, run_train_automl, run_train_stack, run_train_stack_nn_catboost
+from pipelines import load_sql_data, load_split_save_sql_data, load_split_XY, check_tables_in_db, load_split_preprocess, load_and_augment_targets, load_and_augment_features, load_test_data
+from modes import run_train, run_train_multi, run_train_gridsearch, run_train_bayes, run_train_nn, run_train_embed_nn, run_train_embed_genotype_nn, run_train_tunable_nn, run_train_automl, run_train_stack, run_train_stack_nn2embed_catboost, run_train_stack_nn1embed_catboost, run_predict
 from helper import convert_to_num_lists, convert_str_to_numpy_array, convert_nocomma_str_to_list
 
 from sklearn.metrics import r2_score, root_mean_squared_error
@@ -27,11 +19,6 @@ from sklearn.metrics import r2_score, root_mean_squared_error
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
-
-# TARGETS = ['yield', 'titer', 'rate']
-
-# NUM_FOLDS = 8
-
 
 def main():
     """ Main function to run end-to-end pipeline of reading sqlite3 data, preprocessing data, fitting model and making predictions
@@ -53,8 +40,10 @@ def main():
     10. Run H2O AutoML
     11. Run stacking (CatBoostRegressor -> LinearRegression)
     12. Run stacking (neural network -> CatBoostRegressor)
+        Use augmented data as well as 1 embedding layer for onehot encoded categorical features
+    13. Run stacking (neural network -> CatBoostRegressor)
         Use augmented data as well as 2 separate embedding layers for onehot encoded categorical features and strain_background_genotype
-    13. Use saved model to predict
+    14. Use saved model to predict
 
     """
 
@@ -68,7 +57,7 @@ def main():
     if MODE == "train_augmentdata":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
         # Same as mode=="train" when augmentation = 0
-        X_train, y_train, X_test, y_test = load_and_augment("cleaned_data")
+        X_train, y_train, X_test, y_test = load_and_augment_targets("cleaned_data")
         run_train(X_train, y_train, X_test, y_test)
 
     #3
@@ -124,16 +113,31 @@ def main():
     #11
     if MODE == "train_stack":
         # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
-        X_train, y_train, X_test, y_test = load_and_augment('cleaned_data')
+        X_train, y_train, X_test, y_test = load_and_augment_targets('cleaned_data')
         run_train_stack(X_train, y_train, X_test, y_test)
-    
+
     #12
-    if MODE == "train_stack_nn_catboost":
+    if MODE == "train_stack_nn1embed_catboost":
+        # Data source can be cleaned_data, cleaned_data_2, cleaned_data_3
+        # X_train, y_train, X_test, y_test = load_split_preprocess('cleaned_data')
+        X_train, y_train, X_test, y_test = load_and_augment_features("cleaned_data")
+        run_train_stack_nn1embed_catboost(X_train, y_train, X_test, y_test)
+
+    #13
+    if MODE == "train_stack_nn2embed_catboost":
         # Data source must be cleaned_data_4
-        X_train, y_train, X_test, y_test = load_and_augment("cleaned_data_4")
+        X_train, y_train, X_test, y_test = load_and_augment_features("cleaned_data_4")
         convert_to_num_lists(X_train, ["strain_background_genotype_tokenized"])
         convert_to_num_lists(X_test, ["strain_background_genotype_tokenized"])
-        run_train_stack_nn_catboost(X_train, y_train, X_test, y_test)
+        run_train_stack_nn2embed_catboost(X_train, y_train, X_test, y_test)
+
+    # 14
+    # Need to specify optional argument <table_name> to read test data from 
+    if MODE == "predict":
+        X_test, y_test = load_test_data(args.table)
+        convert_to_num_lists(X_test, ["strain_background_genotype_tokenized"])
+        print(type(X_test['strain_background_genotype_tokenized'][438]))
+        run_predict(X_test, y_test)
     
 
 if __name__ == "__main__":
